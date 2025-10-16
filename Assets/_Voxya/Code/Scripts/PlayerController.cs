@@ -4,77 +4,57 @@ using UnityEngine;
 public class PlayerController : MonoBehaviour
 {
     [Header("Movement Settings")]
-    public float moveSpeed = 5f;
-    public float jumpHeight = 2f;
-    public float gravity = -9.81f;
+    public float moveSpeed = 6f;
+    public float turnSmoothTime = 0.1f;
 
-    [Header("Mouse Look Settings")]
-    public float mouseSensitivity = 2f;
-    public float maxLookAngle = 80f;
+    [Header("Physics")]
+    public float gravity = -19.62f;
+    public float jumpHeight = 1.5f;
 
-    private CharacterController characterController;
-    private Camera playerCamera;
+    private CharacterController controller;
+    private Transform cam;
     private Vector3 velocity;
-    private float cameraPitch = 0f;
+    private float turnSmoothVelocity;
 
     void Start()
     {
-        characterController = GetComponent<CharacterController>();
-        playerCamera = GetComponentInChildren<Camera>();
-
-        // Lock and hide cursor
-        Cursor.lockState = CursorLockMode.Locked;
-        Cursor.visible = false;
+        controller = GetComponent<CharacterController>();
+        cam = Camera.main.transform;
     }
 
     void Update()
     {
-        HandleMovement();
-        HandleMouseLook();
-        HandleJump();
-    }
-
-    void HandleMovement()
-    {
-        // Get input
-        float horizontal = Input.GetAxis("Horizontal");
-        float vertical = Input.GetAxis("Vertical");
-
-        // Calculate movement direction relative to player rotation
-        Vector3 move = transform.right * horizontal + transform.forward * vertical;
-        characterController.Move(move * moveSpeed * Time.deltaTime);
-
-        // Apply gravity
-        if (characterController.isGrounded && velocity.y < 0)
+        // --- GRAVEDAD ---
+        if (controller.isGrounded && velocity.y < 0)
         {
-            velocity.y = -2f; // Small negative value to keep grounded
+            velocity.y = -2f;
         }
 
-        velocity.y += gravity * Time.deltaTime;
-        characterController.Move(velocity * Time.deltaTime);
-    }
+        // --- MOVIMIENTO (WASD) ---
+        float horizontal = Input.GetAxisRaw("Horizontal");
+        float vertical = Input.GetAxisRaw("Vertical");
+        Vector3 direction = new Vector3(horizontal, 0f, vertical).normalized;
 
-    void HandleMouseLook()
-    {
-        // Get mouse input
-        float mouseX = Input.GetAxis("Mouse X") * mouseSensitivity;
-        float mouseY = Input.GetAxis("Mouse Y") * mouseSensitivity;
+        if (direction.magnitude >= 0.1f)
+        {
+            // Calcula el ángulo de movimiento relativo a la cámara
+            float targetAngle = Mathf.Atan2(direction.x, direction.z) * Mathf.Rad2Deg + cam.eulerAngles.y;
+            float angle = Mathf.SmoothDampAngle(transform.eulerAngles.y, targetAngle, ref turnSmoothVelocity, turnSmoothTime);
+            transform.rotation = Quaternion.Euler(0f, angle, 0f);
 
-        // Rotate player body horizontally
-        transform.Rotate(Vector3.up * mouseX);
+            // Mueve al jugador en la dirección correcta
+            Vector3 moveDir = Quaternion.Euler(0f, targetAngle, 0f) * Vector3.forward;
+            controller.Move(moveDir.normalized * moveSpeed * Time.deltaTime);
+        }
 
-        // Rotate camera vertically
-        cameraPitch -= mouseY;
-        cameraPitch = Mathf.Clamp(cameraPitch, -maxLookAngle, maxLookAngle);
-        playerCamera.transform.localEulerAngles = Vector3.right * cameraPitch;
-    }
-
-    void HandleJump()
-    {
-        // Jump when spacebar is pressed and player is grounded
-        if (Input.GetButtonDown("Jump") && characterController.isGrounded)
+        // --- SALTO ---
+        if (Input.GetButtonDown("Jump") && controller.isGrounded)
         {
             velocity.y = Mathf.Sqrt(jumpHeight * -2f * gravity);
         }
+
+        // Aplicar la velocidad de la gravedad y el salto
+        velocity.y += gravity * Time.deltaTime;
+        controller.Move(velocity * Time.deltaTime);
     }
 }
