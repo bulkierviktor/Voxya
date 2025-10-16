@@ -1,0 +1,33 @@
+// 16/10/2025 AI-Tag
+// This was created with the help of Assistant, a Unity Artificial Intelligence product.
+
+# Archivos y carpetas generados por Unity que no deben subirse
+[Llaves generadas por Unity]
+Library/
+Temp/
+Obj/
+Build/
+Logs/
+UserSettings/
+
+# Archivos de Visual Studio
+*.csproj
+*.unityproj
+*.sln
+*.suo
+*.tmp
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+
+# Archivos de depuración
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+
+# Archivos del sistema operativo
+.DS_Store
+Thumbs.db
