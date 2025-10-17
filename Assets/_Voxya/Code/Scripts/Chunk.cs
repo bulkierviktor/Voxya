@@ -7,6 +7,8 @@ public class Chunk : MonoBehaviour
 {
     public static int chunkSize = 16;
     public static int chunkHeight = 100;
+    public WorldGenerator worldGenerator;
+    public Vector2 chunkPosition;
     private BlockType[,,] voxelMap = new BlockType[chunkSize, chunkHeight, chunkSize];
 
     private WorldGenerator world;
