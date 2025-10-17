@@ -28,12 +28,15 @@ public class WorldGenerator : MonoBehaviour
                 Chunk newChunk = newChunkObject.GetComponent<Chunk>();
                 if (newChunk != null)
                 {
-                    // 1. Le decimos dónde está.
-                    newChunk.chunkPosition = new Vector2(x, z);
-                    // 2. Le decimos quiénes somos.
-                    newChunk.worldGenerator = this;
-                    // 3. Lo añadimos al directorio (esto ya lo tenías implícito, ahora lo hacemos explícito).
-                    chunkObjects.Add(new Vector2(x, z), newChunk);
+                    // Creamos un Vector2 para la posición, para que el código sea más limpio.
+                    Vector2 position = new Vector2(x, z);
+
+                    // ¡ESTA ES LA LÍNEA CLAVE!
+                    // Le damos al chunk todo lo que necesita y le ordenamos que se construya.
+                    newChunk.Initialize(this, position);
+
+                    // Lo añadimos a nuestro diccionario para tenerlo controlado.
+                    chunkObjects.Add(position, newChunk);
                 }
                 // --- FIN DE LA ADICIÓN 2 ---
             }
@@ -60,42 +63,39 @@ public class WorldGenerator : MonoBehaviour
         {
             // Llama a la función pública que añadimos en PlayerController.
             player.EnableControls();
-            Debug.Log("Mundo generado. Controles del jugador activados.");
+            UnityEngine.Debug.Log("Mundo generado. Controles del jugador activados.");
         }
     }
     // --- FIN DE LA ADICIÓN 4 ---
 
     // --- INICIO DE LA ADICIÓN 5: La función GetBlockAt que falta ---
-    public BlockType GetBlockAt(int worldX, int worldY, int worldZ)
+    public BlockType GetBlockAt(Vector3 worldPosition)
     {
-        // Comprobación de seguridad para evitar errores si se pide un bloque fuera de la altura del mundo.
+        // Extraemos las coordenadas enteras de la posición
+        int worldX = Mathf.FloorToInt(worldPosition.x);
+        int worldY = Mathf.FloorToInt(worldPosition.y);
+        int worldZ = Mathf.FloorToInt(worldPosition.z);
+
+        // El resto de la lógica es la misma que ya teníamos, pero usando estas variables
         if (worldY < 0 || worldY >= 256)
         {
             return BlockType.Air;
         }
 
-        // Calcula a qué chunk pertenecen esas coordenadas globales.
         int chunkX = Mathf.FloorToInt(worldX / 16f);
         int chunkZ = Mathf.FloorToInt(worldZ / 16f);
 
-        // Usa tu función GetChunk para obtener el chunk correspondiente.
         Chunk chunk = GetChunk(chunkX, chunkZ);
 
-        // Si el chunk no existe (porque está fuera del mundo generado), es aire.
         if (chunk == null)
         {
             return BlockType.Air;
         }
 
-        // Calcula la coordenada local dentro de ese chunk.
         int localX = worldX - chunkX * 16;
         int localZ = worldZ - chunkZ * 16;
 
-        // Le pide al chunk que le diga qué bloque hay en esa coordenada local.
-        // Asumimos que `Chunk` tendrá una función `GetBlock` en el futuro.
-        // Por ahora, para que compile, devolvemos Air. La lógica real la haremos después.
-        // return chunk.GetBlock(localX, worldY, localZ);
-        return BlockType.Air; // Placeholder para compilar
+        return chunk.GetBlock(localX, worldY, localZ);
     }
-    // --- FIN DE LA ADICIÓN 5 ---
+ 
 }

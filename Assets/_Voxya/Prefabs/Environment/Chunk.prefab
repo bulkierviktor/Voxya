@@ -12,6 +12,7 @@ GameObject:
   - component: {fileID: 6889546056808327191}
   - component: {fileID: 4946736515163324403}
   - component: {fileID: 8379459670538783970}
+  - component: {fileID: -3667973536509062672}
   m_Layer: 0
   m_Name: Chunk
   m_TagString: Untagged
@@ -102,3 +103,27 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8da0f15d730c94e49904857880db0390, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Chunk
+  world: {fileID: 0}
+  chunkPosition: {x: 0, y: 0}
+--- !u!64 &-3667973536509062672
+MeshCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1575844975945848528}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 5
+  m_Convex: 0
+  m_CookingOptions: 30
+  m_Mesh: {fileID: 0}

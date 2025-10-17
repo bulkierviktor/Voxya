@@ -148,8 +148,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3decadfe53602654ca3fc64875bef8e9, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WorldGenerator
-  chunkPrefab: {fileID: 1575844975945848528, guid: 0b1e5fdfa0ec10c4f9cc665ce1f0378a, type: 3}
+  player: {fileID: 999999997}
   worldSizeInChunks: 10
+  chunkPrefab: {fileID: 1575844975945848528, guid: 0b1e5fdfa0ec10c4f9cc665ce1f0378a, type: 3}
 --- !u!4 &171628218
 Transform:
   m_ObjectHideFlags: 0
@@ -269,8 +270,8 @@ MonoBehaviour:
       m_Calls:
       - m_Target: {fileID: 999999997}
         m_TargetAssemblyTypeName: PlayerController, Assembly-CSharp
-        m_MethodName: 
-        m_Mode: 1
+        m_MethodName: OnMove
+        m_Mode: 0
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
           m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
@@ -282,7 +283,19 @@ MonoBehaviour:
     m_ActionId: 40f94b7e-6009-48f0-85a9-479ddc2d068a
     m_ActionName: 'Player/Move[/Keyboard/w,/Keyboard/upArrow,/Keyboard/s,/Keyboard/downArrow,/Keyboard/a,/Keyboard/leftArrow,/Keyboard/d,/Keyboard/rightArrow]'
   - m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 1311014596}
+        m_TargetAssemblyTypeName: ThirdPersonCamera, Assembly-CSharp
+        m_MethodName: OnLook
+        m_Mode: 0
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
     m_ActionId: 3321abc4-c2d8-430e-acf3-ce72b2c0543c
     m_ActionName: 'Player/Look[/Mouse/delta]'
   - m_PersistentCalls:
@@ -329,6 +342,22 @@ MonoBehaviour:
       m_Calls: []
     m_ActionId: 9442af85-130f-4994-a341-da1e7180b2a7
     m_ActionName: UI/TrackedDeviceOrientation
+  - m_PersistentCalls:
+      m_Calls:
+      - m_Target: {fileID: 999999997}
+        m_TargetAssemblyTypeName: PlayerController, Assembly-CSharp
+        m_MethodName: OnJump
+        m_Mode: 0
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
+    m_ActionId: e0ba0e36-2f07-435f-a51f-c7aefd02d238
+    m_ActionName: 'Player/Jump[/Keyboard/space]'
   m_NeverAutoSwitchControlSchemes: 0
   m_DefaultControlScheme: Keyboard&Mouse
   m_DefaultActionMap: Player
@@ -349,7 +378,7 @@ GameObject:
   - component: {fileID: 1311014596}
   m_Layer: 0
   m_Name: MainCamera
-  m_TagString: Untagged
+  m_TagString: MainCamera
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -645,8 +674,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3decadfe53602654ca3fc64875bef8e9, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WorldGenerator
-  chunkPrefab: {fileID: 1575844975945848528, guid: 0b1e5fdfa0ec10c4f9cc665ce1f0378a, type: 3}
+  player: {fileID: 0}
   worldSizeInChunks: 10
+  chunkPrefab: {fileID: 1575844975945848528, guid: 0b1e5fdfa0ec10c4f9cc665ce1f0378a, type: 3}
 --- !u!4 &1834708829
 Transform:
   m_ObjectHideFlags: 0
