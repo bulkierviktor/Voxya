@@ -9,6 +9,7 @@ public class Chunk : MonoBehaviour
     // --- VARIABLES ---
     public WorldGenerator world;
     public Vector2 chunkPosition; // Necesario para que el WorldGenerator nos ubique
+    public Biome biome; // Biome type for this chunk
 
     public static int chunkSize = 16;
     public static int chunkHeight = 100;
@@ -27,24 +28,25 @@ public class Chunk : MonoBehaviour
     private static readonly Vector2 StoneTexture = new Vector2(1, 0);
 
     // --- PUNTO DE PARTIDA ---
-    public void Initialize(WorldGenerator world, Vector2 position)
+    public void Initialize(WorldGenerator world, Vector2 position, Biome biome)
     {
         this.world = world;
         this.chunkPosition = position;
+        this.biome = biome;
 
         PopulateVoxelMap();
         GenerateChunkMesh();
         CreateMesh();
     }
 
-    // --- LÓGICA DE GENERACIÓN DE DATOS ---
+    // --- Lï¿½GICA DE GENERACIï¿½N DE DATOS ---
     void PopulateVoxelMap()
     {
         for (int x = 0; x < chunkSize; x++)
         {
             for (int z = 0; z < chunkSize; z++)
             {
-                // Usamos la posición del chunk que nos dio el WorldGenerator
+                // Usamos la posiciï¿½n del chunk que nos dio el WorldGenerator
                 float worldX = (chunkPosition.x * chunkSize) + x;
                 float worldZ = (chunkPosition.y * chunkSize) + z;
 
@@ -61,17 +63,20 @@ public class Chunk : MonoBehaviour
         }
     }
 
-    public static int GetTerrainHeight(float worldX, float worldZ)
+    public int GetTerrainHeight(float worldX, float worldZ)
     {
         float noiseScale = 25f;
         int terrainMaxHeight = 40;
         float noiseX = worldX / noiseScale;
         float noiseZ = worldZ / noiseScale;
         float perlinValue = Mathf.PerlinNoise(noiseX, noiseZ);
-        return Mathf.RoundToInt(perlinValue * terrainMaxHeight);
+        
+        // Apply biome height multiplier
+        float biomeMultiplier = BiomeManager.GetBiomeHeightMultiplier(biome);
+        return Mathf.RoundToInt(perlinValue * terrainMaxHeight * biomeMultiplier);
     }
 
-    // --- LÓGICA DE CREACIÓN DE MALLA ---
+    // --- Lï¿½GICA DE CREACIï¿½N DE MALLA ---
     void GenerateChunkMesh()
     {
         for (int y = 0; y < chunkHeight; y++)
@@ -148,7 +153,7 @@ public class Chunk : MonoBehaviour
 
     void CreateMesh()
     {
-        UnityEngine.Debug.Log($"Creando malla para el chunk en {chunkPosition}. Vértices: {vertices.Count}, Triángulos: {triangles.Count}");
+        UnityEngine.Debug.Log($"Creando malla para el chunk en {chunkPosition}. Vï¿½rtices: {vertices.Count}, Triï¿½ngulos: {triangles.Count}");
 
         Mesh mesh = new Mesh();
         mesh.vertices = vertices.ToArray();
@@ -169,7 +174,7 @@ public class Chunk : MonoBehaviour
         return voxelMap[x, y, z];
     }
 
-    // --- DATOS ESTÁTICOS (CONSTANTES) ---
+    // --- DATOS ESTï¿½TICOS (CONSTANTES) ---
     private static readonly Vector3[] FaceNormals = { Vector3.back, Vector3.forward, Vector3.up, Vector3.down, Vector3.left, Vector3.right };
     private static readonly Vector3[,] VoxelFaceData = {
         {new Vector3(0, 0, 0), new Vector3(0, 1, 0), new Vector3(1, 1, 0), new Vector3(1, 0, 0)},
