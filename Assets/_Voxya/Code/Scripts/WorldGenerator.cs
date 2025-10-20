@@ -1,7 +1,5 @@
-using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Diagnostics;
 using UnityEngine;
 
 public class WorldGenerator : MonoBehaviour
@@ -29,11 +27,14 @@ public class WorldGenerator : MonoBehaviour
 
     void Start()
     {
+        // Evita ambigüedad de Random: usa UnityEngine.Random explícitamente
         if (seed == 0)
-            seed = Random.Range(int.MinValue + 1, int.MaxValue);
+            seed = UnityEngine.Random.Range(int.MinValue + 1, int.MaxValue);
 
         biomeManager = new BiomeManager(seed);
         cityManager = new CityManager(seed, cityCount, cityMinDistance, cityMaxDistance);
+
+        // Debe ser público en CityManager
         cityManager.GenerateCities();
 
         worldData = new WorldData(seed);
@@ -156,7 +157,7 @@ public class WorldGenerator : MonoBehaviour
         return chunk;
     }
 
-    // Compatibilidad con consultas fuera del chunk local
+    // Para consultas de frontera entre chunks
     public BlockType GetBlockAt(Vector3 worldPosition)
     {
         int worldX = Mathf.FloorToInt(worldPosition.x);
@@ -194,8 +195,9 @@ public class WorldGenerator : MonoBehaviour
         yield return new WaitForEndOfFrame();
         if (player != null)
         {
+            // Evita ambigüedad: usa explícitamente UnityEngine.Debug
+            UnityEngine.Debug.Log("Mundo generado. Controles del jugador activados.");
             player.EnableControls();
-            Debug.Log("Mundo generado. Controles del jugador activados.");
         }
     }
 }

@@ -1,132 +1,116 @@
 using System.Collections.Generic;
+using System.Diagnostics;
 using UnityEngine;
 
-/// <summary>
-/// CityManager handles the generation and placement of cities in the world
-/// Generates city positions deterministically based on seed
-/// Ensures minimum separation between cities and places first city near spawn
-/// </summary>
 public class CityManager
 {
-    private WorldData worldData;
-    private int cityCount;
-    private float minCityDistance; // In chunks
-    private float maxCityDistance; // In chunks
-    private int minCityRadius;
-    private int maxCityRadius;
-    
-    public CityManager(WorldData worldData, int cityCount = 5, 
-                      float minCityDistance = 40f, float maxCityDistance = 80f,
-                      int minCityRadius = 2, int maxCityRadius = 4)
+    private readonly int seed;
+    private readonly System.Random rng;
+    private readonly int cityCount;
+    private readonly int minDistance;
+    private readonly int maxDistance;
+
+    // Lista pública para que WorldGenerator pueda copiar a WorldData
+    public List<CityData> cities = new List<CityData>();
+
+    public CityManager(int seed, int cityCount = 5, int minDistance = 40, int maxDistance = 80)
     {
-        this.worldData = worldData;
+        this.seed = seed;
+        this.rng = new System.Random(seed);
         this.cityCount = cityCount;
-        this.minCityDistance = minCityDistance;
-        this.maxCityDistance = maxCityDistance;
-        this.minCityRadius = minCityRadius;
-        this.maxCityRadius = maxCityRadius;
-        
-        GenerateCities();
+        this.minDistance = minDistance;
+        this.maxDistance = maxDistance;
     }
 
-    /// <summary>
-    /// Generates city positions deterministically based on seed
-    /// First city is placed 3-6 chunks from origin
-    /// Subsequent cities maintain minimum separation
-    /// </summary>
-    private void GenerateCities()
+    // Debe ser público (WorldGenerator lo invoca)
+    public void GenerateCities()
     {
-        // Use seed for deterministic random generation
-        Random.InitState(worldData.seed);
-        
-        // Generate first city near spawn (3-6 chunks from origin)
-        float firstCityDistance = Random.Range(3f, 6f);
-        float firstCityAngle = Random.Range(0f, 360f) * Mathf.Deg2Rad;
-        Vector2 firstCityPos = new Vector2(
-            Mathf.Cos(firstCityAngle) * firstCityDistance,
-            Mathf.Sin(firstCityAngle) * firstCityDistance
-        );
-        int firstCityRadius = Random.Range(minCityRadius, maxCityRadius + 1);
-        worldData.cities.Add(new CityData(firstCityPos, firstCityRadius));
-        
-        // Generate remaining cities
+        cities.Clear();
+
+        int attemptsLimit = 10000;
         int attempts = 0;
-        int maxAttempts = cityCount * 100; // Prevent infinite loops
-        
-        while (worldData.cities.Count < cityCount && attempts < maxAttempts)
+
+        while (cities.Count < cityCount && attempts < attemptsLimit)
         {
             attempts++;
-            
-            // Generate random position within distance range
-            float distance = Random.Range(minCityDistance, maxCityDistance);
-            float angle = Random.Range(0f, 360f) * Mathf.Deg2Rad;
-            Vector2 candidatePos = new Vector2(
-                Mathf.Cos(angle) * distance,
-                Mathf.Sin(angle) * distance
-            );
-            
-            // Check if position maintains minimum distance from all existing cities
-            bool validPosition = true;
-            foreach (CityData existingCity in worldData.cities)
+
+            CityData candidate;
+
+            if (cities.Count == 0)
             {
-                float distanceBetween = Vector2.Distance(candidatePos, existingCity.position);
-                if (distanceBetween < minCityDistance)
+                // Primera ciudad cerca del spawn: 3..6 chunks
+                int firstRadius = rng.Next(3, 7);
+                float firstAngle = (float)(rng.NextDouble() * Mathf.PI * 2f);
+
+                Vector2 cc = new Vector2(
+                    Mathf.RoundToInt(Mathf.Cos(firstAngle) * firstRadius),
+                    Mathf.RoundToInt(Mathf.Sin(firstAngle) * firstRadius)
+                );
+                int rad = rng.Next(2, 5); // 2..4
+                candidate = new CityData(cc, rad);
+            }
+            else
+            {
+                int radiusChunksFromOrigin = rng.Next(minDistance, maxDistance + 1);
+                float angle = (float)(rng.NextDouble() * Mathf.PI * 2f);
+
+                Vector2 cc = new Vector2(
+                    Mathf.RoundToInt(Mathf.Cos(angle) * radiusChunksFromOrigin),
+                    Mathf.RoundToInt(Mathf.Sin(angle) * radiusChunksFromOrigin)
+                );
+                int rad = rng.Next(2, 5);
+                candidate = new CityData(cc, rad);
+            }
+
+            // Verificar distancia mínima entre ciudades (en chunks)
+            bool ok = true;
+            foreach (var c in cities)
+            {
+                if (Vector2.Distance(c.centerChunk, candidate.centerChunk) < minDistance)
                 {
-                    validPosition = false;
-                    break;
+                    ok = false; break;
                 }
             }
-            
-            if (validPosition)
-            {
-                int radius = Random.Range(minCityRadius, maxCityRadius + 1);
-                worldData.cities.Add(new CityData(candidatePos, radius));
-            }
-        }
-        
-        Debug.Log($"Generated {worldData.cities.Count} cities with seed {worldData.seed}");
-    }
 
-    /// <summary>
-    /// Checks if a chunk position is within any city's radius
-    /// Returns the CityData if inside a city, null otherwise
-    /// </summary>
-    public CityData GetCityAtChunk(Vector2 chunkPosition)
-    {
-        foreach (CityData city in worldData.cities)
+            if (ok) cities.Add(candidate);
+        }
+
+        if (cities.Count < cityCount)
         {
-            float distance = Vector2.Distance(chunkPosition, city.position);
-            if (distance <= city.radius)
-            {
-                return city;
-            }
+            Debug.LogWarning($"CityManager: solo pudo generar {cities.Count}/{cityCount} ciudades (seed {seed}).");
         }
-        return null;
     }
 
-    /// <summary>
-    /// Checks if a chunk position is the center of a city
-    /// </summary>
-    public CityData GetCityCenterAtChunk(Vector2 chunkPosition)
+    // ¿Este chunk es el centro de una ciudad?
+    public bool TryGetCityCenterAtChunk(Vector2 chunkCoord, out CityData city)
     {
-        foreach (CityData city in worldData.cities)
+        foreach (var c in cities)
         {
-            // Check if chunk is the city center (rounded to nearest chunk)
-            Vector2 centerChunk = new Vector2(
-                Mathf.RoundToInt(city.position.x),
-                Mathf.RoundToInt(city.position.y)
-            );
-            
-            if (Vector2.Distance(chunkPosition, centerChunk) < 0.5f)
+            if (c.centerChunk == chunkCoord)
             {
-                return city;
+                city = c;
+                return true;
             }
         }
-        return null;
+        city = null;
+        return false;
     }
 
-    public List<CityData> GetAllCities()
+    // ¿Un punto del mundo (x,z) está dentro del radio de alguna ciudad?
+    public bool TryGetCityForWorldXZ(float worldX, float worldZ, int chunkSize, out CityData city)
     {
-        return worldData.cities;
+        foreach (var c in cities)
+        {
+            Vector2 wc = c.WorldCenterXZ(chunkSize);
+            float dist = Vector2.Distance(new Vector2(worldX, worldZ), wc);
+            float radiusWorld = c.radiusChunks * chunkSize;
+            if (dist <= radiusWorld)
+            {
+                city = c;
+                return true;
+            }
+        }
+        city = null;
+        return false;
     }
 }

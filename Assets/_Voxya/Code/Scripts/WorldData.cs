@@ -1,10 +1,6 @@
 using System;
 using System.Collections.Generic;
-using UnityEngine;
-/// <summary>
-/// Serializable world data that stores the seed and city information
-/// Can be saved/loaded to persist world generation
-/// </summary>
+
 [Serializable]
 public class WorldData
 {
