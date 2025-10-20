@@ -1,276 +1,194 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using UnityEngine;
 
 public class WorldGenerator : MonoBehaviour
 {
-    // Player references
     public PlayerController player;
-    public Transform playerTransform; // Player transform for streaming chunks
+    public Transform playerTransform;
 
-    // Streaming and world generation parameters
-    public int seed = 12345; // Seed for deterministic world generation
-    public int viewDistanceInChunks = 3; // Number of chunks to render around player (default 3, can be increased to 4)
-    
-    // City generation parameters
-    public int cityCount = 5;
-    public float minCityDistance = 40f; // In chunks
-    public float maxCityDistance = 80f; // In chunks
-    public int minCityRadius = 2; // In chunks
-    public int maxCityRadius = 4; // In chunks
-    public GameObject cityPrefab; // Optional: if not set, placeholder will be used
-    
-    // Legacy parameter (kept for compatibility but not used for full world generation)
-    public int worldSizeInChunks = 10;
     public GameObject chunkPrefab;
-    public Dictionary<Vector2, Chunk> chunkObjects = new Dictionary<Vector2, Chunk>();
-    
-    // Managers for biomes and cities
+    public GameObject cityPrefab; // opcional: si null, usamos placeholder
+
+    public int seed = 0;
+    public int viewDistanceInChunks = 3; // pruebas (4 en final)
+    public int cityCount = 5;
+    public int cityMinDistance = 40;
+    public int cityMaxDistance = 80;
+
+    private Dictionary<Vector2, Chunk> activeChunks = new Dictionary<Vector2, Chunk>();
+    private HashSet<Vector2> chunksRequested = new HashSet<Vector2>();
     private BiomeManager biomeManager;
     private CityManager cityManager;
     private WorldData worldData;
-    
-    // Active chunks tracking
-    private Dictionary<Vector2, Chunk> activeChunks = new Dictionary<Vector2, Chunk>();
-    private Vector2 lastPlayerChunkPosition = new Vector2(float.MaxValue, float.MaxValue);
-    
-    // Parent objects for organization
-    private GameObject chunksParent;
-    private GameObject citiesParent;
-    
-    // Throttling for chunk updates
-    private float updateInterval = 0.2f; // Update chunks every 0.2 seconds
-    private Coroutine chunkUpdateCoroutine;
+
+    private Coroutine chunkCoroutine;
+    private Transform citiesRoot;
 
     void Start()
     {
-        // Initialize world data and managers
-        worldData = new WorldData(seed);
+        if (seed == 0)
+            seed = Random.Range(int.MinValue + 1, int.MaxValue);
+
         biomeManager = new BiomeManager(seed);
-        cityManager = new CityManager(worldData, cityCount, minCityDistance, maxCityDistance, minCityRadius, maxCityRadius);
-        
-        // Create parent objects for organization
-        chunksParent = new GameObject("Chunks");
-        citiesParent = new GameObject("Cities");
-        
-        // If playerTransform is not set, try to get it from player
-        if (playerTransform == null && player != null)
-        {
-            playerTransform = player.transform;
-        }
-        
-        // Enable player controls immediately for streaming (no need to wait)
-        if (player != null)
-        {
-            player.EnableControls();
-            Debug.Log("Player controls enabled. Streaming chunks around player.");
-        }
-        
-        // Start chunk update coroutine
-        chunkUpdateCoroutine = StartCoroutine(ChunkUpdateCoroutine());
+        cityManager = new CityManager(seed, cityCount, cityMinDistance, cityMaxDistance);
+        cityManager.GenerateCities();
+
+        worldData = new WorldData(seed);
+        worldData.cities = new List<CityData>(cityManager.cities);
+
+        var citiesGO = GameObject.Find("Cities");
+        if (citiesGO == null) citiesGO = new GameObject("Cities");
+        citiesRoot = citiesGO.transform;
+
+        chunkCoroutine = StartCoroutine(ChunkUpdateCoroutine());
+        StartCoroutine(EnablePlayerAfterWorldGen());
     }
 
-    /// <summary>
-    /// Coroutine that periodically updates chunks around the player
-    /// Runs every 0.2 seconds to check if player has moved to a new chunk
-    /// </summary>
     private IEnumerator ChunkUpdateCoroutine()
     {
+        UpdateChunksAroundPlayer();
         while (true)
         {
-            yield return new WaitForSeconds(updateInterval);
-            
-            if (playerTransform != null)
-            {
-                UpdateChunksAroundPlayer();
-            }
+            yield return new WaitForSeconds(0.2f);
+            UpdateChunksAroundPlayer();
         }
     }
 
-    /// <summary>
-    /// Updates chunks around the player's current position
-    /// Loads chunks within view distance and unloads distant chunks
-    /// </summary>
-    private void UpdateChunksAroundPlayer()
+    void UpdateChunksAroundPlayer()
     {
-        // Get player's current chunk position
-        Vector2 playerChunkPos = new Vector2(
-            Mathf.FloorToInt(playerTransform.position.x / Chunk.chunkSize),
-            Mathf.FloorToInt(playerTransform.position.z / Chunk.chunkSize)
-        );
-        
-        // Only update if player has moved to a different chunk
-        if (playerChunkPos == lastPlayerChunkPosition)
+        if (playerTransform == null)
         {
-            return;
+            if (player != null && player.transform != null) playerTransform = player.transform;
+            else return;
         }
-        
-        lastPlayerChunkPosition = playerChunkPos;
-        
-        // Determine which chunks should be active
-        HashSet<Vector2> chunksToKeep = new HashSet<Vector2>();
-        
-        for (int x = -viewDistanceInChunks; x <= viewDistanceInChunks; x++)
+
+        Vector3 p = playerTransform.position;
+        int pcx = Mathf.FloorToInt(p.x / Chunk.chunkSize);
+        int pcz = Mathf.FloorToInt(p.z / Chunk.chunkSize);
+
+        int r = viewDistanceInChunks;
+        HashSet<Vector2> needed = new HashSet<Vector2>();
+
+        for (int dx = -r; dx <= r; dx++)
         {
-            for (int z = -viewDistanceInChunks; z <= viewDistanceInChunks; z++)
+            for (int dz = -r; dz <= r; dz++)
             {
-                Vector2 chunkPos = new Vector2(
-                    playerChunkPos.x + x,
-                    playerChunkPos.y + z
-                );
-                chunksToKeep.Add(chunkPos);
-                
-                // Create chunk if it doesn't exist
-                if (!activeChunks.ContainsKey(chunkPos))
+                Vector2 coord = new Vector2(pcx + dx, pcz + dz);
+                needed.Add(coord);
+
+                if (!activeChunks.ContainsKey(coord) && !chunksRequested.Contains(coord))
                 {
-                    StartCoroutine(CreateChunkRoutine(chunkPos));
+                    StartCoroutine(CreateChunkRoutine(coord));
+                    chunksRequested.Add(coord);
                 }
             }
         }
-        
-        // Remove chunks that are too far away
-        List<Vector2> chunksToRemove = new List<Vector2>();
-        foreach (var kvp in activeChunks)
+
+        var toRemove = new List<Vector2>();
+        foreach (var kv in activeChunks)
         {
-            if (!chunksToKeep.Contains(kvp.Key))
+            if (!needed.Contains(kv.Key))
             {
-                chunksToRemove.Add(kvp.Key);
+                Destroy(kv.Value.gameObject);
+                toRemove.Add(kv.Key);
             }
         }
-        
-        foreach (Vector2 chunkPos in chunksToRemove)
-        {
-            if (activeChunks.TryGetValue(chunkPos, out Chunk chunk))
-            {
-                Destroy(chunk.gameObject);
-                activeChunks.Remove(chunkPos);
-                chunkObjects.Remove(chunkPos); // Also remove from legacy dictionary
-            }
-        }
+        foreach (var c in toRemove) activeChunks.Remove(c);
     }
 
-    /// <summary>
-    /// Creates a single chunk at the specified position
-    /// Yields one frame to spread chunk generation over time (1 chunk per frame)
-    /// Determines biome and spawns city if applicable
-    /// </summary>
-    private IEnumerator CreateChunkRoutine(Vector2 chunkPosition)
+    private IEnumerator CreateChunkRoutine(Vector2 chunkCoord)
     {
-        // Yield one frame to throttle chunk creation
         yield return null;
-        
-        // Determine biome for this chunk
-        Biome biome = biomeManager.GetBiomeAtChunk(chunkPosition);
-        
-        // Instantiate chunk
-        Vector3 worldPos = new Vector3(
-            chunkPosition.x * Chunk.chunkSize,
-            0,
-            chunkPosition.y * Chunk.chunkSize
-        );
-        
-        GameObject newChunkObject = Instantiate(chunkPrefab, worldPos, Quaternion.identity, chunksParent.transform);
-        newChunkObject.name = $"Chunk_{chunkPosition.x}_{chunkPosition.y}";
-        
-        Chunk newChunk = newChunkObject.GetComponent<Chunk>();
-        if (newChunk != null)
+
+        Vector3 worldPos = new Vector3(chunkCoord.x * Chunk.chunkSize, 0, chunkCoord.y * Chunk.chunkSize);
+        GameObject go = Instantiate(chunkPrefab, worldPos, Quaternion.identity);
+        Chunk chunk = go.GetComponent<Chunk>();
+        if (chunk != null)
         {
-            // Initialize chunk with biome
-            newChunk.Initialize(this, chunkPosition, biome);
-            
-            // Add to active chunks
-            activeChunks.Add(chunkPosition, newChunk);
-            chunkObjects.Add(chunkPosition, newChunk); // Also add to legacy dictionary
-            
-            // Check if this chunk should have a city
-            CityData cityAtChunk = cityManager.GetCityAtChunk(chunkPosition);
-            if (cityAtChunk != null)
-            {
-                // Check if this is the city center
-                CityData cityCenter = cityManager.GetCityCenterAtChunk(chunkPosition);
-                if (cityCenter != null)
-                {
-                    SpawnCity(cityCenter, worldPos);
-                }
-            }
+            Biome biome = biomeManager.GetBiomeForChunk((int)chunkCoord.x, (int)chunkCoord.y);
+            chunk.Initialize(this, chunkCoord, biome);
+            activeChunks[chunkCoord] = chunk;
         }
+
+        // Spawn placeholder SOLO en el centro de la ciudad
+        if (cityManager.TryGetCityCenterAtChunk(chunkCoord, out CityData city))
+        {
+            SpawnCityCenterPlaceholder(city);
+        }
+
+        chunksRequested.Remove(chunkCoord);
     }
 
-    /// <summary>
-    /// Spawns a city at the given position
-    /// If cityPrefab is assigned, instantiates it; otherwise creates a placeholder cube
-    /// </summary>
-    private void SpawnCity(CityData city, Vector3 worldPosition)
+    private void SpawnCityCenterPlaceholder(CityData city)
     {
+        Vector2 wc = city.WorldCenterXZ(Chunk.chunkSize);
+        float plateauY = EstimateCityPlateauHeight(city);
+        Vector3 pos = new Vector3(wc.x, plateauY + 4f, wc.y); // elevar un poco sobre el suelo
+
+        GameObject go;
         if (cityPrefab != null)
         {
-            // Instantiate city prefab
-            GameObject cityObject = Instantiate(cityPrefab, worldPosition, Quaternion.identity, citiesParent.transform);
-            cityObject.name = $"City_{city.position.x}_{city.position.y}";
-            Debug.Log($"Spawned city prefab at {city.position} with radius {city.radius}");
+            go = Instantiate(cityPrefab, pos, Quaternion.identity, citiesRoot);
         }
         else
         {
-            // Create placeholder cube
-            GameObject placeholder = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            placeholder.transform.position = worldPosition + new Vector3(Chunk.chunkSize / 2f, 10f, Chunk.chunkSize / 2f);
-            placeholder.transform.localScale = new Vector3(10f, 20f, 10f);
-            placeholder.transform.parent = citiesParent.transform;
-            placeholder.name = $"CityPlaceholder_{city.position.x}_{city.position.y}";
-            
-            // Add a distinctive color
-            Renderer renderer = placeholder.GetComponent<Renderer>();
-            if (renderer != null)
-            {
-                renderer.material.color = new Color(0.8f, 0.6f, 0.2f); // Gold/yellow color
-            }
-            
-            Debug.Log($"Spawned city placeholder at {city.position} with radius {city.radius}");
+            go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            go.transform.SetParent(citiesRoot, true);
+            go.transform.position = pos;
+            float size = Mathf.Max(Chunk.chunkSize * 0.75f, 8f);
+            go.transform.localScale = new Vector3(size, 8f, size);
+            go.name = $"City_{city.centerChunk.x}_{city.centerChunk.y}";
         }
     }
 
-    /// <summary>
-    /// Gets chunk at specific coordinates (legacy compatibility)
-    /// </summary>
+    private float EstimateCityPlateauHeight(CityData city)
+    {
+        Vector2 wc = city.WorldCenterXZ(Chunk.chunkSize);
+        return Chunk.GetTerrainHeight(wc.x, wc.y) + 1;
+    }
+
     public Chunk GetChunk(int x, int z)
     {
-        chunkObjects.TryGetValue(new Vector2(x, z), out Chunk chunk);
+        activeChunks.TryGetValue(new Vector2(x, z), out Chunk chunk);
         return chunk;
     }
 
-    /// <summary>
-    /// Gets block at world position (used by chunks for neighbor checking)
-    /// </summary>
+    // Compatibilidad con consultas fuera del chunk local
     public BlockType GetBlockAt(Vector3 worldPosition)
     {
         int worldX = Mathf.FloorToInt(worldPosition.x);
         int worldY = Mathf.FloorToInt(worldPosition.y);
         int worldZ = Mathf.FloorToInt(worldPosition.z);
 
-        if (worldY < 0 || worldY >= Chunk.chunkHeight)
-        {
+        if (worldY < 0 || worldY >= 256)
             return BlockType.Air;
-        }
 
         int chunkX = Mathf.FloorToInt(worldX / (float)Chunk.chunkSize);
         int chunkZ = Mathf.FloorToInt(worldZ / (float)Chunk.chunkSize);
 
         Chunk chunk = GetChunk(chunkX, chunkZ);
-
-        if (chunk == null)
-        {
-            return BlockType.Air;
-        }
+        if (chunk == null) return BlockType.Air;
 
         int localX = worldX - chunkX * Chunk.chunkSize;
         int localZ = worldZ - chunkZ * Chunk.chunkSize;
 
         return chunk.GetBlock(localX, worldY, localZ);
     }
-    
-    /// <summary>
-    /// Legacy coroutine - kept for compatibility but now enables controls immediately
-    /// </summary>
+
+    // Para Chunk: ¿este (worldX, worldZ) está dentro de alguna ciudad?
+    public bool TryGetCityForWorldXZ(float worldX, float worldZ, out CityData city)
+    {
+        return cityManager.TryGetCityForWorldXZ(worldX, worldZ, Chunk.chunkSize, out city);
+    }
+
+    public Biome GetBiomeForChunk(Vector2 chunkCoord)
+    {
+        return biomeManager.GetBiomeForChunk((int)chunkCoord.x, (int)chunkCoord.y);
+    }
+
     private IEnumerator EnablePlayerAfterWorldGen()
     {
         yield return new WaitForEndOfFrame();

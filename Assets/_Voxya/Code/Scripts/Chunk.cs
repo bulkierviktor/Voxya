@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Diagnostics;
 using UnityEngine;
 
 [RequireComponent(typeof(MeshFilter))]
@@ -7,20 +6,17 @@ using UnityEngine;
 [RequireComponent(typeof(MeshCollider))]
 public class Chunk : MonoBehaviour
 {
-    // --- VARIABLES ---
-    public WorldGenerator world;
-    public Vector2 chunkPosition; // Necesario para que el WorldGenerator nos ubique
-    public Biome biome; // Biome type for this chunk
-
     public static int chunkSize = 16;
     public static int chunkHeight = 100;
+
+    public WorldGenerator world;
+    public Vector2 chunkPosition;
 
     private BlockType[,,] voxelMap = new BlockType[chunkSize, chunkHeight, chunkSize];
     private List<Vector3> vertices = new List<Vector3>();
     private List<int> triangles = new List<int>();
     private List<Vector2> uvs = new List<Vector2>();
 
-    // --- CONSTANTES DE TEXTURAS ---
     private const float TextureAtlasSizeInBlocks = 2f;
     private const float NormalizedBlockTextureSize = 1f / TextureAtlasSizeInBlocks;
     private static readonly Vector2 GrassTopTexture = new Vector2(0, 1);
@@ -28,7 +24,8 @@ public class Chunk : MonoBehaviour
     private static readonly Vector2 DirtTexture = new Vector2(0, 0);
     private static readonly Vector2 StoneTexture = new Vector2(1, 0);
 
-    // --- PUNTO DE PARTIDA ---
+    private Biome biome;
+
     public void Initialize(WorldGenerator world, Vector2 position, Biome biome)
     {
         this.world = world;
@@ -40,44 +37,70 @@ public class Chunk : MonoBehaviour
         CreateMesh();
     }
 
-    // --- L�GICA DE GENERACI�N DE DATOS ---
     void PopulateVoxelMap()
     {
+        float heightMultiplier = 1f;
+        switch (biome)
+        {
+            case Biome.Plains: heightMultiplier = 1f; break;
+            case Biome.Hills: heightMultiplier = 1.35f; break;
+            case Biome.Desert: heightMultiplier = 0.8f; break;
+            case Biome.Snow: heightMultiplier = 0.9f; break;
+            case Biome.Forest: heightMultiplier = 1.1f; break;
+        }
+
+        const float smoothBorder = 8f;
+
         for (int x = 0; x < chunkSize; x++)
         {
             for (int z = 0; z < chunkSize; z++)
             {
-                // Usamos la posici�n del chunk que nos dio el WorldGenerator
                 float worldX = (chunkPosition.x * chunkSize) + x;
                 float worldZ = (chunkPosition.y * chunkSize) + z;
 
-                int worldHeight = GetTerrainHeight(worldX, worldZ);
+                int baseHeight = GetTerrainHeight(worldX, worldZ);
+                int targetHeight = Mathf.RoundToInt(baseHeight * heightMultiplier);
+
+                if (world.TryGetCityForWorldXZ(worldX, worldZ, out CityData city))
+                {
+                    Vector2 center = city.WorldCenterXZ(chunkSize);
+                    float dist = Vector2.Distance(new Vector2(worldX, worldZ), center);
+                    float radiusWorld = city.radiusChunks * chunkSize;
+
+                    int plateau = GetTerrainHeight(center.x, center.y);
+
+                    if (dist <= radiusWorld - smoothBorder)
+                    {
+                        targetHeight = plateau;
+                    }
+                    else
+                    {
+                        float t = Mathf.InverseLerp(radiusWorld, radiusWorld - smoothBorder, dist);
+                        targetHeight = Mathf.RoundToInt(Mathf.Lerp(targetHeight, plateau, t));
+                    }
+                }
 
                 for (int y = 0; y < chunkHeight; y++)
                 {
-                    if (y == worldHeight - 1) voxelMap[x, y, z] = BlockType.Grass;
-                    else if (y < worldHeight - 1 && y > worldHeight - 5) voxelMap[x, y, z] = BlockType.Dirt;
-                    else if (y <= worldHeight - 5) voxelMap[x, y, z] = BlockType.Stone;
+                    if (y == targetHeight - 1) voxelMap[x, y, z] = BlockType.Grass;
+                    else if (y < targetHeight - 1 && y > targetHeight - 5) voxelMap[x, y, z] = BlockType.Dirt;
+                    else if (y <= targetHeight - 5) voxelMap[x, y, z] = BlockType.Stone;
                     else voxelMap[x, y, z] = BlockType.Air;
                 }
             }
         }
     }
 
-    public int GetTerrainHeight(float worldX, float worldZ)
+    public static int GetTerrainHeight(float worldX, float worldZ)
     {
         float noiseScale = 25f;
         int terrainMaxHeight = 40;
         float noiseX = worldX / noiseScale;
         float noiseZ = worldZ / noiseScale;
         float perlinValue = Mathf.PerlinNoise(noiseX, noiseZ);
-        
-        // Apply biome height multiplier
-        float biomeMultiplier = BiomeManager.GetBiomeHeightMultiplier(biome);
-        return Mathf.RoundToInt(perlinValue * terrainMaxHeight * biomeMultiplier);
+        return Mathf.RoundToInt(perlinValue * terrainMaxHeight);
     }
 
-    // --- L�GICA DE CREACI�N DE MALLA ---
     void GenerateChunkMesh()
     {
         for (int y = 0; y < chunkHeight; y++)
@@ -91,7 +114,7 @@ public class Chunk : MonoBehaviour
                         continue;
 
                     Vector3 blockPos = new Vector3(x, y, z);
-                    for (int i = 0; i < 6; i++) // Itera las 6 caras
+                    for (int i = 0; i < 6; i++)
                     {
                         if (IsFaceVisible(blockPos, i))
                         {
@@ -106,13 +129,12 @@ public class Chunk : MonoBehaviour
     bool IsFaceVisible(Vector3 blockPos, int faceIndex)
     {
         Vector3 neighborPos = blockPos + FaceNormals[faceIndex];
-        Vector3 globalNeighborPos = this.transform.position + neighborPos;
 
         if (neighborPos.x < 0 || neighborPos.x >= chunkSize ||
             neighborPos.y < 0 || neighborPos.y >= chunkHeight ||
             neighborPos.z < 0 || neighborPos.z >= chunkSize)
         {
-            return world.GetBlockAt(globalNeighborPos) == BlockType.Air;
+            return world.GetBlockAt(transform.position + neighborPos) == BlockType.Air;
         }
         else
         {
@@ -123,6 +145,7 @@ public class Chunk : MonoBehaviour
     void CreateFace(BlockType blockType, Vector3 blockPos, int faceIndex)
     {
         int vertCount = vertices.Count;
+
         for (int i = 0; i < 4; i++)
         {
             vertices.Add(blockPos + VoxelFaceData[faceIndex, i]);
@@ -154,8 +177,6 @@ public class Chunk : MonoBehaviour
 
     void CreateMesh()
     {
-        UnityEngine.Debug.Log($"Creando malla para el chunk en {chunkPosition}. V�rtices: {vertices.Count}, Tri�ngulos: {triangles.Count}");
-
         Mesh mesh = new Mesh();
         mesh.vertices = vertices.ToArray();
         mesh.triangles = triangles.ToArray();
@@ -163,7 +184,7 @@ public class Chunk : MonoBehaviour
         mesh.RecalculateNormals();
 
         GetComponent<MeshFilter>().mesh = mesh;
-        GetComponent<MeshCollider>().sharedMesh = mesh; // Para las colisiones
+        GetComponent<MeshCollider>().sharedMesh = mesh;
     }
 
     public BlockType GetBlock(int x, int y, int z)
@@ -175,7 +196,6 @@ public class Chunk : MonoBehaviour
         return voxelMap[x, y, z];
     }
 
-    // --- DATOS EST�TICOS (CONSTANTES) ---
     private static readonly Vector3[] FaceNormals = { Vector3.back, Vector3.forward, Vector3.up, Vector3.down, Vector3.left, Vector3.right };
     private static readonly Vector3[,] VoxelFaceData = {
         {new Vector3(0, 0, 0), new Vector3(0, 1, 0), new Vector3(1, 1, 0), new Vector3(1, 0, 0)},

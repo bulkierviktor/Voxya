@@ -1,4 +1,3 @@
-// Biome enum defines the different biome types available in the world
 public enum Biome
 {
     Plains,

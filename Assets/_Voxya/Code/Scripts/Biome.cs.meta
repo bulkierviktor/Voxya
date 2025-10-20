@@ -1,11 +1,2 @@
 fileFormatVersion: 2
-guid: $(uuidgen | tr -d '-' | head -c 32)
-MonoImporter:
-  externalObjects: {}
-  serializedVersion: 2
-  defaultReferences: []
-  executionOrder: 0
-  icon: {instanceID: 0}
-  userData: 
-  assetBundleName: 
-  assetBundleVariant: 
+guid: 323a477a31a8c164daeb67d3fe57edb1
