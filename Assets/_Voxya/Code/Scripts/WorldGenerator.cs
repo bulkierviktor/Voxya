@@ -18,6 +18,12 @@ public class WorldGenerator : MonoBehaviour
     [Min(1f)] public float terrainMaxHeightMeters = 20f;
     [Min(0.1f)] public float noiseScaleMeters = 25f;
 
+    // Autoajuste del radio de visión por metros objetivo
+    [Header("Auto View Distance")]
+    public bool autoAdjustViewDistance = true;
+    [Min(5f)] public float targetVisibleWidthMeters = 80f;
+    public bool enableCityFlattening = true; // toggle de depuración
+
     public int seed = 0;
     public int viewDistanceInChunks = 6; // sube/ baja según rendimiento
     public int cityCount = 5;
@@ -40,6 +46,18 @@ public class WorldGenerator : MonoBehaviour
         Chunk.terrainMaxHeightMeters = Mathf.Max(1f, terrainMaxHeightMeters);
         Chunk.noiseScaleMeters = Mathf.Max(0.1f, noiseScaleMeters);
 
+        // Propaga toggle de aplanado
+        Chunk.enableCityFlattening = enableCityFlattening;
+
+        // autoajustar viewDistance en función de blockSize y chunkSize
+        if (autoAdjustViewDistance)
+        {
+            float chunkMeters = Chunk.chunkSize * Chunk.blockSize;
+            // (2r + 1) * chunkMeters ≈ targetVisibleWidthMeters  =>  r ≈ ((target/chunkMeters) - 1) / 2
+            int r = Mathf.Max(1, Mathf.RoundToInt((targetVisibleWidthMeters / Mathf.Max(0.001f, chunkMeters) - 1f) * 0.5f));
+            viewDistanceInChunks = Mathf.Clamp(r, 1, 32);
+        }
+
         if (seed == 0)
             seed = UnityEngine.Random.Range(int.MinValue + 1, int.MaxValue);
 
@@ -53,6 +71,8 @@ public class WorldGenerator : MonoBehaviour
         var citiesGO = GameObject.Find("Cities");
         if (citiesGO == null) citiesGO = new GameObject("Cities");
         citiesRoot = citiesGO.transform;
+
+        UnityEngine.Debug.Log($"[WorldGenerator] blockSize={Chunk.blockSize:F6}m, chunkMeters={Chunk.chunkSize * Chunk.blockSize:F3}m, targetWidth={targetVisibleWidthMeters}m, viewDistanceInChunks={viewDistanceInChunks}, seed={seed}");
 
         chunkCoroutine = StartCoroutine(ChunkUpdateCoroutine());
         StartCoroutine(EnablePlayerAfterWorldGen());

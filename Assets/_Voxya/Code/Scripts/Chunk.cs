@@ -15,6 +15,8 @@ public class Chunk : MonoBehaviour
     // Terreno definido en METROS (lo fija WorldGenerator)
     public static float terrainMaxHeightMeters = 20f;
     public static float noiseScaleMeters = 25f;
+    // Permite desactivar aplanado de ciudades sin tocar CityManager
+    public static bool enableCityFlattening = true;
 
     public WorldGenerator world;
     public Vector2 chunkPosition;
@@ -56,21 +58,24 @@ public class Chunk : MonoBehaviour
             case Biome.Forest: heightMultiplier = 1.1f; break;
         }
 
-        const float smoothBorder = 8f;
+        // ANTES: const float smoothBorder = 8f; // (bloques)
+        // AHORA: borde de transición definido en METROS, convertido a BLOQUES
+        float desiredBorderMeters = 4f; // prueba 3–6 m según gusto
+        float smoothBorderBlocks = Mathf.Max(1f, desiredBorderMeters / Mathf.Max(0.0001f, blockSize));
 
         for (int x = 0; x < chunkSize; x++)
         {
             for (int z = 0; z < chunkSize; z++)
             {
-                // Coordenadas en BLOQUES
                 float worldXBlocks = (chunkPosition.x * chunkSize) + x;
                 float worldZBlocks = (chunkPosition.y * chunkSize) + z;
 
                 int baseHeight = GetTerrainHeight(worldXBlocks, worldZBlocks);
                 int targetHeight = Mathf.RoundToInt(baseHeight * heightMultiplier);
 
-                // Consulta de ciudad: convertimos a METROS para WorldGenerator.GetBlockAt
-                if (world.TryGetCityForWorldXZ(worldXBlocks * blockSize, worldZBlocks * blockSize, out CityData city))
+                // Solo aplicar aplanado si está habilitado y hay ciudad
+                if (enableCityFlattening &&
+                    world.TryGetCityForWorldXZ(worldXBlocks * blockSize, worldZBlocks * blockSize, out CityData city))
                 {
                     Vector2 centerBlocks = city.WorldCenterXZ(chunkSize);
                     float distBlocks = Vector2.Distance(new Vector2(worldXBlocks, worldZBlocks), centerBlocks);
@@ -78,13 +83,13 @@ public class Chunk : MonoBehaviour
 
                     int plateau = GetTerrainHeight(centerBlocks.x, centerBlocks.y);
 
-                    if (distBlocks <= radiusBlocks - smoothBorder)
+                    if (distBlocks <= radiusBlocks - smoothBorderBlocks)
                     {
                         targetHeight = plateau;
                     }
                     else
                     {
-                        float t = Mathf.InverseLerp(radiusBlocks, radiusBlocks - smoothBorder, distBlocks);
+                        float t = Mathf.InverseLerp(radiusBlocks, radiusBlocks - smoothBorderBlocks, distBlocks);
                         targetHeight = Mathf.RoundToInt(Mathf.Lerp(targetHeight, plateau, t));
                     }
                 }
