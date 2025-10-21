@@ -42,6 +42,14 @@ public class WorldGenerator : MonoBehaviour
     [Min(0)] public int colliderDistanceInChunks = 2;      // solo colliders cerca del jugador
     public float updateScanInterval = 0.2f;                // frecuencia de escaneo
 
+    // Preparación del spawn
+    [Header("Spawn prep")]
+    public bool waitSpawnAreaReady = true;
+    [Min(0)] public int spawnEnsureRadiusChunks = 1;       // asegura 3x3 alrededor
+    [Min(0f)] public float spawnYOffsetBlocks = 2f;        // cuántos bloques por encima del terreno
+    [Min(0.1f)] public float spawnCheckInterval = 0.05f;   // comprobación periódica
+    [Min(0.5f)] public float spawnTimeoutSeconds = 6f;     // seguridad
+
     private Dictionary<Vector2, Chunk> activeChunks = new Dictionary<Vector2, Chunk>();
     private HashSet<Vector2> enqueued = new HashSet<Vector2>();
     private Queue<Vector2> toCreate = new Queue<Vector2>();
@@ -55,6 +63,10 @@ public class WorldGenerator : MonoBehaviour
     private Coroutine scanCoroutine;
     private Coroutine buildWorker;
     private Transform citiesRoot;
+
+    // Estado temporal de Rigidbody del jugador
+    private Rigidbody playerRb;
+    private bool rbGravityWasEnabled = true;
 
     void OnValidate()
     {
@@ -115,8 +127,8 @@ public class WorldGenerator : MonoBehaviour
         buildWorker = StartCoroutine(ChunkBuildWorker());
         scanCoroutine = StartCoroutine(ScanLoop());
 
-        // Habilitar jugador tras primer frame
-        StartCoroutine(EnablePlayerAfterWorldGen());
+        // Preparar spawn y habilitar jugador cuando el suelo esté listo
+        StartCoroutine(PrepareSpawnAndEnablePlayer());
     }
 
     private IEnumerator ScanLoop()
@@ -324,13 +336,135 @@ public class WorldGenerator : MonoBehaviour
         return biomeManager.GetBiomeForChunk((int)chunkCoord.x, (int)chunkCoord.y);
     }
 
-    private IEnumerator EnablePlayerAfterWorldGen()
+    // ==========================
+    // Spawn prep
+    // ==========================
+    private IEnumerator PrepareSpawnAndEnablePlayer()
     {
-        yield return new WaitForEndOfFrame();
-        if (player != null)
+        // Capturar transform y Rigidbody si existen
+        if (playerTransform == null && player != null) playerTransform = player.transform;
+        if (playerTransform != null)
         {
-            UnityEngine.Debug.Log("Mundo generado. Controles del jugador activados.");
+            playerRb = playerTransform.GetComponent<Rigidbody>();
+            if (playerRb != null)
+            {
+                rbGravityWasEnabled = playerRb.useGravity;
+                playerRb.useGravity = false; // evita caer durante la preparación
+            }
+        }
+
+        // Encolar explícitamente el área del spawn y, si hace falta, construir el chunk central ya
+        ForceEnsureSpawnArea(spawnEnsureRadiusChunks);
+
+        if (waitSpawnAreaReady && playerTransform != null)
+        {
+            float t0 = Time.realtimeSinceStartup;
+            while (!IsSpawnAreaReady(spawnEnsureRadiusChunks))
+            {
+                if (Time.realtimeSinceStartup - t0 > spawnTimeoutSeconds)
+                {
+                    UnityEngine.Debug.LogWarning("[WorldGenerator] Spawn timeout: continuando sin área completa.");
+                    break;
+                }
+                yield return new WaitForSeconds(spawnCheckInterval);
+            }
+        }
+
+        // Colocar jugador sobre el terreno (2 bloques por encima)
+        if (playerTransform != null)
+        {
+            int bx = Mathf.FloorToInt(playerTransform.position.x / Chunk.blockSize);
+            int bz = Mathf.FloorToInt(playerTransform.position.z / Chunk.blockSize);
+            int groundBlocks = Chunk.GetTerrainHeight(bx, bz);
+            float groundY = (groundBlocks + spawnYOffsetBlocks) * Chunk.blockSize;
+
+            Vector3 p = playerTransform.position;
+            p.y = groundY;
+            playerTransform.position = p;
+
+            // Habilitar colliders cercanos por si no estaban
+            EnsureCollidersAround(spawnEnsureRadiusChunks);
+
+            // Restaurar gravedad
+            if (playerRb != null) playerRb.useGravity = rbGravityWasEnabled;
+        }
+
+        // Habilitar controles
+        if (player != null)
             player.EnableControls();
+
+        UnityEngine.Debug.Log("[WorldGenerator] Spawn preparado. Controles del jugador activados.");
+    }
+
+    private void ForceEnsureSpawnArea(int radius)
+    {
+        if (playerTransform == null) return;
+
+        int playerBlockX = Mathf.FloorToInt(playerTransform.position.x / Chunk.blockSize);
+        int playerBlockZ = Mathf.FloorToInt(playerTransform.position.z / Chunk.blockSize);
+        int pcx = Mathf.FloorToInt(playerBlockX / (float)Chunk.chunkSize);
+        int pcz = Mathf.FloorToInt(playerBlockZ / (float)Chunk.chunkSize);
+
+        // Encolar todos los chunks del radio
+        for (int dx = -radius; dx <= radius; dx++)
+        {
+            for (int dz = -radius; dz <= radius; dz++)
+            {
+                Vector2 coord = new Vector2(pcx + dx, pcz + dz);
+                if (!activeChunks.ContainsKey(coord) && !enqueued.Contains(coord))
+                {
+                    enqueued.Add(coord);
+                    toCreate.Enqueue(coord);
+                }
+            }
+        }
+
+        // Construir inmediatamente el chunk central si aún no existe (evita caída)
+        Vector2 center = new Vector2(pcx, pcz);
+        if (!activeChunks.ContainsKey(center))
+        {
+            CreateOrReuseChunk(center);
+        }
+    }
+
+    private bool IsSpawnAreaReady(int radius)
+    {
+        if (playerTransform == null) return true;
+
+        int playerBlockX = Mathf.FloorToInt(playerTransform.position.x / Chunk.blockSize);
+        int playerBlockZ = Mathf.FloorToInt(playerTransform.position.z / Chunk.blockSize);
+        int pcx = Mathf.FloorToInt(playerBlockX / (float)Chunk.chunkSize);
+        int pcz = Mathf.FloorToInt(playerBlockZ / (float)Chunk.chunkSize);
+
+        for (int dx = -radius; dx <= radius; dx++)
+        {
+            for (int dz = -radius; dz <= radius; dz++)
+            {
+                Vector2 coord = new Vector2(pcx + dx, pcz + dz);
+                if (!activeChunks.ContainsKey(coord))
+                    return false;
+            }
+        }
+        return true;
+    }
+
+    private void EnsureCollidersAround(int radius)
+    {
+        if (playerTransform == null) return;
+
+        int playerBlockX = Mathf.FloorToInt(playerTransform.position.x / Chunk.blockSize);
+        int playerBlockZ = Mathf.FloorToInt(playerTransform.position.z / Chunk.blockSize);
+        int pcx = Mathf.FloorToInt(playerBlockX / (float)Chunk.chunkSize);
+        int pcz = Mathf.FloorToInt(playerBlockZ / (float)Chunk.chunkSize);
+
+        for (int dx = -radius; dx <= radius; dx++)
+        {
+            for (int dz = -radius; dz <= radius; dz++)
+            {
+                Vector2 coord = new Vector2(pcx + dx, pcz + dz);
+                if (activeChunks.TryGetValue(coord, out var ch))
+                    ch.SetColliderEnabled(true);
+            }
         }
     }
 }
