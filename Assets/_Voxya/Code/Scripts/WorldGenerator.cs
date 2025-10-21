@@ -402,24 +402,42 @@ public class WorldGenerator : MonoBehaviour
             int bx = Mathf.FloorToInt(playerTransform.position.x / Chunk.blockSize);
             int bz = Mathf.FloorToInt(playerTransform.position.z / Chunk.blockSize);
 
-            // Altura estimada por mapa de alturas (bloques -> metros)
+            // Altura estimada por ruido (en bloques -> metros)
             int groundBlocks = Chunk.GetTerrainHeight(bx, bz);
-            float estimatedGroundY = (groundBlocks + spawnYOffsetBlocks) * Chunk.blockSize;
+            float groundY = groundBlocks * Chunk.blockSize;
 
-            // Si ya hay collider, hacer raycast para colocar con precisión
-            float finalY = estimatedGroundY;
+            // Intentar raycast para obtener suelo real si el collider ya está
             EnsureCollidersAround(spawnEnsureRadiusChunks);
-            yield return new WaitForFixedUpdate(); // deja que física registre colliders
+            yield return new WaitForFixedUpdate(); // dejar registrar colliders en física
+
+            float feetYOffsetMeters = spawnYOffsetBlocks * Chunk.blockSize;
+            float feetY = groundY + feetYOffsetMeters;
 
             RaycastHit hit;
-            Vector3 from = new Vector3(playerTransform.position.x, estimatedGroundY + 10f * Chunk.blockSize, playerTransform.position.z);
+            Vector3 from = new Vector3(playerTransform.position.x, groundY + 10f * Chunk.blockSize, playerTransform.position.z);
             if (Physics.Raycast(from, Vector3.down, out hit, 1000f, ~0, QueryTriggerInteraction.Ignore))
             {
-                finalY = hit.point.y + spawnYOffsetBlocks * Chunk.blockSize;
+                feetY = hit.point.y + feetYOffsetMeters;
+            }
+
+            float centerY = feetY;
+            var cc = playerCc; // CharacterController si existe
+            if (cc != null)
+            {
+                // Transform.position es el CENTRO de la cápsula
+                centerY = feetY + (cc.height * 0.5f) + cc.skinWidth;
+            }
+            else
+            {
+                // Fallback si no hay CharacterController: intenta usar bounds del collider
+                float halfHeight = 1f; // valor por defecto 1 m
+                var col = playerTransform.GetComponent<Collider>();
+                if (col != null) halfHeight = col.bounds.extents.y;
+                centerY = feetY + halfHeight + 0.01f;
             }
 
             Vector3 p = playerTransform.position;
-            p.y = finalY;
+            p.y = centerY;
             playerTransform.position = p;
             Physics.SyncTransforms();
         }
@@ -468,7 +486,7 @@ public class WorldGenerator : MonoBehaviour
 
         // Construir inmediatamente el chunk central si aún no existe (evita caída)
         Vector2 center = new Vector2(pcx, pcz);
-        if (!activeChunks.containsKey(center))
+        if (!activeChunks.ContainsKey(center))
         {
             CreateOrReuseChunk(center);
         }
