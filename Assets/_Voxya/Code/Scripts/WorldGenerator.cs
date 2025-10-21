@@ -46,7 +46,7 @@ public class WorldGenerator : MonoBehaviour
     [Header("Spawn prep")]
     public bool waitSpawnAreaReady = true;
     [Min(0)] public int spawnEnsureRadiusChunks = 1;       // asegura 3x3 alrededor
-    [Min(0f)] public float spawnYOffsetBlocks = 2f;        // cuántos bloques por encima del terreno
+    [Min(0f)] public float spawnYOffsetBlocks = 2f;        // bloques por encima del terreno
     [Min(0.1f)] public float spawnCheckInterval = 0.05f;   // comprobación periódica
     [Min(0.5f)] public float spawnTimeoutSeconds = 6f;     // seguridad
 
@@ -64,9 +64,13 @@ public class WorldGenerator : MonoBehaviour
     private Coroutine buildWorker;
     private Transform citiesRoot;
 
-    // Estado temporal de Rigidbody del jugador
+    // Estado temporal de componentes del jugador
     private Rigidbody playerRb;
     private bool rbGravityWasEnabled = true;
+    private bool rbKinematicWasEnabled = false;
+    private CharacterController playerCc;
+    private bool ccWasEnabled = true;
+    private bool playerControllerWasEnabled = true;
 
     void OnValidate()
     {
@@ -122,6 +126,9 @@ public class WorldGenerator : MonoBehaviour
             $"[WorldGenerator] blockSize={Chunk.blockSize:F6}m, chunkMeters={Chunk.chunkSize * Chunk.blockSize:F3}m, " +
             $"targetWidth={targetVisibleWidthMeters}m, viewDistanceInChunks={viewDistanceInChunks}, " +
             $"enableCityFlattening={enableCityFlattening}, cities={cityManager.cities.Count}, seed={seed}");
+
+        // Asegurar que el radio de colliders cubre el radio de spawn
+        colliderDistanceInChunks = Mathf.Max(colliderDistanceInChunks, spawnEnsureRadiusChunks);
 
         // Lanzar worker (creación repartida) y escaneo periódico
         buildWorker = StartCoroutine(ChunkBuildWorker());
@@ -341,25 +348,44 @@ public class WorldGenerator : MonoBehaviour
     // ==========================
     private IEnumerator PrepareSpawnAndEnablePlayer()
     {
-        // Capturar transform y Rigidbody si existen
+        // Capturar transform y componentes de física/control
         if (playerTransform == null && player != null) playerTransform = player.transform;
+
+        if (player != null)
+        {
+            playerControllerWasEnabled = player.enabled;
+            player.enabled = false; // desactivar lógica del jugador durante el spawn
+        }
+
         if (playerTransform != null)
         {
             playerRb = playerTransform.GetComponent<Rigidbody>();
             if (playerRb != null)
             {
                 rbGravityWasEnabled = playerRb.useGravity;
-                playerRb.useGravity = false; // evita caer durante la preparación
+                rbKinematicWasEnabled = playerRb.isKinematic;
+                playerRb.useGravity = false;
+                playerRb.isKinematic = true; // evita cualquier caída
+                playerRb.linearVelocity = Vector3.zero;
+                playerRb.angularVelocity = Vector3.zero;
+            }
+
+            playerCc = playerTransform.GetComponent<CharacterController>();
+            if (playerCc != null)
+            {
+                ccWasEnabled = playerCc.enabled;
+                playerCc.enabled = false; // evita que CharacterController aplique movimientos/gravedad
             }
         }
 
-        // Encolar explícitamente el área del spawn y, si hace falta, construir el chunk central ya
+        // Forzar encolado del área de spawn y construir el chunk central de inmediato
         ForceEnsureSpawnArea(spawnEnsureRadiusChunks);
 
+        // Esperar a que el área esté lista (incluyendo collider en chunk central)
         if (waitSpawnAreaReady && playerTransform != null)
         {
             float t0 = Time.realtimeSinceStartup;
-            while (!IsSpawnAreaReady(spawnEnsureRadiusChunks))
+            while (!IsSpawnAreaReady(spawnEnsureRadiusChunks, requireCenterCollider: true))
             {
                 if (Time.realtimeSinceStartup - t0 > spawnTimeoutSeconds)
                 {
@@ -370,28 +396,49 @@ public class WorldGenerator : MonoBehaviour
             }
         }
 
-        // Colocar jugador sobre el terreno (2 bloques por encima)
+        // Posicionar jugador sobre el terreno
         if (playerTransform != null)
         {
             int bx = Mathf.FloorToInt(playerTransform.position.x / Chunk.blockSize);
             int bz = Mathf.FloorToInt(playerTransform.position.z / Chunk.blockSize);
+
+            // Altura estimada por mapa de alturas (bloques -> metros)
             int groundBlocks = Chunk.GetTerrainHeight(bx, bz);
-            float groundY = (groundBlocks + spawnYOffsetBlocks) * Chunk.blockSize;
+            float estimatedGroundY = (groundBlocks + spawnYOffsetBlocks) * Chunk.blockSize;
+
+            // Si ya hay collider, hacer raycast para colocar con precisión
+            float finalY = estimatedGroundY;
+            EnsureCollidersAround(spawnEnsureRadiusChunks);
+            yield return new WaitForFixedUpdate(); // deja que física registre colliders
+
+            RaycastHit hit;
+            Vector3 from = new Vector3(playerTransform.position.x, estimatedGroundY + 10f * Chunk.blockSize, playerTransform.position.z);
+            if (Physics.Raycast(from, Vector3.down, out hit, 1000f, ~0, QueryTriggerInteraction.Ignore))
+            {
+                finalY = hit.point.y + spawnYOffsetBlocks * Chunk.blockSize;
+            }
 
             Vector3 p = playerTransform.position;
-            p.y = groundY;
+            p.y = finalY;
             playerTransform.position = p;
-
-            // Habilitar colliders cercanos por si no estaban
-            EnsureCollidersAround(spawnEnsureRadiusChunks);
-
-            // Restaurar gravedad
-            if (playerRb != null) playerRb.useGravity = rbGravityWasEnabled;
+            Physics.SyncTransforms();
         }
 
-        // Habilitar controles
+        // Restaurar componentes y controles
+        if (playerCc != null) playerCc.enabled = ccWasEnabled;
+        if (playerRb != null)
+        {
+            playerRb.isKinematic = rbKinematicWasEnabled;
+            playerRb.useGravity = rbGravityWasEnabled;
+            playerRb.linearVelocity = Vector3.zero;
+            playerRb.angularVelocity = Vector3.zero;
+        }
         if (player != null)
+        {
+            // Reactiva tu script y sus entradas
+            player.enabled = playerControllerWasEnabled;
             player.EnableControls();
+        }
 
         UnityEngine.Debug.Log("[WorldGenerator] Spawn preparado. Controles del jugador activados.");
     }
@@ -427,7 +474,7 @@ public class WorldGenerator : MonoBehaviour
         }
     }
 
-    private bool IsSpawnAreaReady(int radius)
+    private bool IsSpawnAreaReady(int radius, bool requireCenterCollider)
     {
         if (playerTransform == null) return true;
 
@@ -445,6 +492,19 @@ public class WorldGenerator : MonoBehaviour
                     return false;
             }
         }
+
+        if (requireCenterCollider)
+        {
+            Vector2 center = new Vector2(pcx, pcz);
+            if (activeChunks.TryGetValue(center, out var ch))
+            {
+                var mc = ch.GetComponent<MeshCollider>();
+                if (mc == null || !mc.enabled || mc.sharedMesh == null)
+                    return false;
+            }
+            else return false;
+        }
+
         return true;
     }
 
