@@ -468,7 +468,7 @@ public class WorldGenerator : MonoBehaviour
 
         // Construir inmediatamente el chunk central si aún no existe (evita caída)
         Vector2 center = new Vector2(pcx, pcz);
-        if (!activeChunks.ContainsKey(center))
+        if (!activeChunks.containsKey(center))
         {
             CreateOrReuseChunk(center);
         }
