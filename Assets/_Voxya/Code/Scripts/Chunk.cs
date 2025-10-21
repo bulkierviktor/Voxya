@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 
 [RequireComponent(typeof(MeshFilter))]
@@ -8,6 +8,13 @@ public class Chunk : MonoBehaviour
 {
     public static int chunkSize = 16;
     public static int chunkHeight = 100;
+
+    // Tamaño del bloque en METROS (lo fija WorldGenerator al arrancar)
+    public static float blockSize = 1f;
+
+    // Terreno definido en METROS (lo fija WorldGenerator)
+    public static float terrainMaxHeightMeters = 20f;
+    public static float noiseScaleMeters = 25f;
 
     public WorldGenerator world;
     public Vector2 chunkPosition;
@@ -55,27 +62,29 @@ public class Chunk : MonoBehaviour
         {
             for (int z = 0; z < chunkSize; z++)
             {
-                float worldX = (chunkPosition.x * chunkSize) + x;
-                float worldZ = (chunkPosition.y * chunkSize) + z;
+                // Coordenadas en BLOQUES
+                float worldXBlocks = (chunkPosition.x * chunkSize) + x;
+                float worldZBlocks = (chunkPosition.y * chunkSize) + z;
 
-                int baseHeight = GetTerrainHeight(worldX, worldZ);
+                int baseHeight = GetTerrainHeight(worldXBlocks, worldZBlocks);
                 int targetHeight = Mathf.RoundToInt(baseHeight * heightMultiplier);
 
-                if (world.TryGetCityForWorldXZ(worldX, worldZ, out CityData city))
+                // Consulta de ciudad: convertimos a METROS para WorldGenerator.GetBlockAt
+                if (world.TryGetCityForWorldXZ(worldXBlocks * blockSize, worldZBlocks * blockSize, out CityData city))
                 {
-                    Vector2 center = city.WorldCenterXZ(chunkSize);
-                    float dist = Vector2.Distance(new Vector2(worldX, worldZ), center);
-                    float radiusWorld = city.radiusChunks * chunkSize;
+                    Vector2 centerBlocks = city.WorldCenterXZ(chunkSize);
+                    float distBlocks = Vector2.Distance(new Vector2(worldXBlocks, worldZBlocks), centerBlocks);
+                    float radiusBlocks = city.radiusChunks * chunkSize;
 
-                    int plateau = GetTerrainHeight(center.x, center.y);
+                    int plateau = GetTerrainHeight(centerBlocks.x, centerBlocks.y);
 
-                    if (dist <= radiusWorld - smoothBorder)
+                    if (distBlocks <= radiusBlocks - smoothBorder)
                     {
                         targetHeight = plateau;
                     }
                     else
                     {
-                        float t = Mathf.InverseLerp(radiusWorld, radiusWorld - smoothBorder, dist);
+                        float t = Mathf.InverseLerp(radiusBlocks, radiusBlocks - smoothBorder, distBlocks);
                         targetHeight = Mathf.RoundToInt(Mathf.Lerp(targetHeight, plateau, t));
                     }
                 }
@@ -91,14 +100,22 @@ public class Chunk : MonoBehaviour
         }
     }
 
+    // worldX/worldZ en BLOQUES (convertimos a METROS para muestrear ruido)
     public static int GetTerrainHeight(float worldX, float worldZ)
     {
-        float noiseScale = 25f;
-        int terrainMaxHeight = 40;
-        float noiseX = worldX / noiseScale;
-        float noiseZ = worldZ / noiseScale;
+        float xMeters = worldX * blockSize;
+        float zMeters = worldZ * blockSize;
+
+        float noiseX = xMeters / Mathf.Max(0.0001f, noiseScaleMeters);
+        float noiseZ = zMeters / Mathf.Max(0.0001f, noiseScaleMeters);
         float perlinValue = Mathf.PerlinNoise(noiseX, noiseZ);
-        return Mathf.RoundToInt(perlinValue * terrainMaxHeight);
+
+        int terrainMaxHeightBlocks = Mathf.Clamp(
+            Mathf.RoundToInt(terrainMaxHeightMeters / Mathf.Max(0.0001f, blockSize)),
+            1, chunkHeight
+        );
+
+        return Mathf.RoundToInt(perlinValue * terrainMaxHeightBlocks);
     }
 
     void GenerateChunkMesh()
@@ -113,7 +130,7 @@ public class Chunk : MonoBehaviour
                     if (blockType == BlockType.Air)
                         continue;
 
-                    Vector3 blockPos = new Vector3(x, y, z);
+                    Vector3 blockPos = new Vector3(x, y, z); // en BLOQUES
                     for (int i = 0; i < 6; i++)
                     {
                         if (IsFaceVisible(blockPos, i))
@@ -134,7 +151,8 @@ public class Chunk : MonoBehaviour
             neighborPos.y < 0 || neighborPos.y >= chunkHeight ||
             neighborPos.z < 0 || neighborPos.z >= chunkSize)
         {
-            return world.GetBlockAt(transform.position + neighborPos) == BlockType.Air;
+            Vector3 worldNeighborPos = transform.position + (neighborPos * blockSize); // METROS
+            return world.GetBlockAt(worldNeighborPos) == BlockType.Air;
         }
         else
         {
@@ -148,7 +166,8 @@ public class Chunk : MonoBehaviour
 
         for (int i = 0; i < 4; i++)
         {
-            vertices.Add(blockPos + VoxelFaceData[faceIndex, i]);
+            // BLOQUES → METROS
+            vertices.Add((blockPos + VoxelFaceData[faceIndex, i]) * blockSize);
         }
 
         triangles.Add(vertCount);

@@ -1,4 +1,4 @@
-using System.Collections;
+Ôªøusing System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -10,8 +10,16 @@ public class WorldGenerator : MonoBehaviour
     public GameObject chunkPrefab;
     public GameObject cityPrefab; // opcional: si null, usamos placeholder
 
+    // Escala del bloque en unidades de Unity (m). Para ‚Äú1 bloque paisaje = 11 voxeles peque√±os‚Äù, usa 1f/11f.
+    [Min(0.02f)]
+    public float blockSize = 1f / 11f;
+
+    // Terreno definido en METROS (para que no cambie la forma/altura al variar blockSize)
+    [Min(1f)] public float terrainMaxHeightMeters = 20f;
+    [Min(0.1f)] public float noiseScaleMeters = 25f;
+
     public int seed = 0;
-    public int viewDistanceInChunks = 3; // pruebas (4 en final)
+    public int viewDistanceInChunks = 6; // sube/ baja seg√∫n rendimiento
     public int cityCount = 5;
     public int cityMinDistance = 40;
     public int cityMaxDistance = 80;
@@ -27,14 +35,16 @@ public class WorldGenerator : MonoBehaviour
 
     void Start()
     {
-        // Evita ambig¸edad de Random: usa UnityEngine.Random explÌcitamente
+        // Aplicar escala global a Chunk
+        Chunk.blockSize = Mathf.Max(0.02f, blockSize);
+        Chunk.terrainMaxHeightMeters = Mathf.Max(1f, terrainMaxHeightMeters);
+        Chunk.noiseScaleMeters = Mathf.Max(0.1f, noiseScaleMeters);
+
         if (seed == 0)
             seed = UnityEngine.Random.Range(int.MinValue + 1, int.MaxValue);
 
         biomeManager = new BiomeManager(seed);
         cityManager = new CityManager(seed, cityCount, cityMinDistance, cityMaxDistance);
-
-        // Debe ser p˙blico en CityManager
         cityManager.GenerateCities();
 
         worldData = new WorldData(seed);
@@ -66,9 +76,11 @@ public class WorldGenerator : MonoBehaviour
             else return;
         }
 
-        Vector3 p = playerTransform.position;
-        int pcx = Mathf.FloorToInt(p.x / Chunk.chunkSize);
-        int pcz = Mathf.FloorToInt(p.z / Chunk.chunkSize);
+        // Posici√≥n jugador en BLOQUES (no metros)
+        int playerBlockX = Mathf.FloorToInt(playerTransform.position.x / Chunk.blockSize);
+        int playerBlockZ = Mathf.FloorToInt(playerTransform.position.z / Chunk.blockSize);
+        int pcx = Mathf.FloorToInt(playerBlockX / (float)Chunk.chunkSize);
+        int pcz = Mathf.FloorToInt(playerBlockZ / (float)Chunk.chunkSize);
 
         int r = viewDistanceInChunks;
         HashSet<Vector2> needed = new HashSet<Vector2>();
@@ -104,7 +116,13 @@ public class WorldGenerator : MonoBehaviour
     {
         yield return null;
 
-        Vector3 worldPos = new Vector3(chunkCoord.x * Chunk.chunkSize, 0, chunkCoord.y * Chunk.chunkSize);
+        // Posici√≥n del chunk en METROS (unidades de Unity)
+        Vector3 worldPos = new Vector3(
+            chunkCoord.x * Chunk.chunkSize * Chunk.blockSize,
+            0,
+            chunkCoord.y * Chunk.chunkSize * Chunk.blockSize
+        );
+
         GameObject go = Instantiate(chunkPrefab, worldPos, Quaternion.identity);
         Chunk chunk = go.GetComponent<Chunk>();
         if (chunk != null)
@@ -114,7 +132,6 @@ public class WorldGenerator : MonoBehaviour
             activeChunks[chunkCoord] = chunk;
         }
 
-        // Spawn placeholder SOLO en el centro de la ciudad
         if (cityManager.TryGetCityCenterAtChunk(chunkCoord, out CityData city))
         {
             SpawnCityCenterPlaceholder(city);
@@ -125,9 +142,15 @@ public class WorldGenerator : MonoBehaviour
 
     private void SpawnCityCenterPlaceholder(CityData city)
     {
-        Vector2 wc = city.WorldCenterXZ(Chunk.chunkSize);
-        float plateauY = EstimateCityPlateauHeight(city);
-        Vector3 pos = new Vector3(wc.x, plateauY + 4f, wc.y); // elevar un poco sobre el suelo
+        // Centro en BLOQUES ‚Üí convertir a METROS
+        Vector2 centerBlocks = city.WorldCenterXZ(Chunk.chunkSize);
+        float centerX = centerBlocks.x * Chunk.blockSize;
+        float centerZ = centerBlocks.y * Chunk.blockSize;
+
+        int plateauBlocks = Chunk.GetTerrainHeight(centerBlocks.x, centerBlocks.y);
+        float plateauY = plateauBlocks * Chunk.blockSize;
+
+        Vector3 pos = new Vector3(centerX, plateauY + 12f * Chunk.blockSize, centerZ);
 
         GameObject go;
         if (cityPrefab != null)
@@ -139,16 +162,10 @@ public class WorldGenerator : MonoBehaviour
             go = GameObject.CreatePrimitive(PrimitiveType.Cube);
             go.transform.SetParent(citiesRoot, true);
             go.transform.position = pos;
-            float size = Mathf.Max(Chunk.chunkSize * 0.75f, 8f);
-            go.transform.localScale = new Vector3(size, 8f, size);
+            float size = Mathf.Max(Chunk.chunkSize * 0.75f * Chunk.blockSize, 12f * Chunk.blockSize);
+            go.transform.localScale = new Vector3(size, 12f * Chunk.blockSize, size);
             go.name = $"City_{city.centerChunk.x}_{city.centerChunk.y}";
         }
-    }
-
-    private float EstimateCityPlateauHeight(CityData city)
-    {
-        Vector2 wc = city.WorldCenterXZ(Chunk.chunkSize);
-        return Chunk.GetTerrainHeight(wc.x, wc.y) + 1;
     }
 
     public Chunk GetChunk(int x, int z)
@@ -157,32 +174,34 @@ public class WorldGenerator : MonoBehaviour
         return chunk;
     }
 
-    // Para consultas de frontera entre chunks
     public BlockType GetBlockAt(Vector3 worldPosition)
     {
-        int worldX = Mathf.FloorToInt(worldPosition.x);
-        int worldY = Mathf.FloorToInt(worldPosition.y);
-        int worldZ = Mathf.FloorToInt(worldPosition.z);
+        // METROS ‚Üí BLOQUES
+        int bx = Mathf.FloorToInt(worldPosition.x / Chunk.blockSize);
+        int by = Mathf.FloorToInt(worldPosition.y / Chunk.blockSize);
+        int bz = Mathf.FloorToInt(worldPosition.z / Chunk.blockSize);
 
-        if (worldY < 0 || worldY >= 256)
+        if (by < 0 || by >= Chunk.chunkHeight)
             return BlockType.Air;
 
-        int chunkX = Mathf.FloorToInt(worldX / (float)Chunk.chunkSize);
-        int chunkZ = Mathf.FloorToInt(worldZ / (float)Chunk.chunkSize);
+        int chunkX = Mathf.FloorToInt(bx / (float)Chunk.chunkSize);
+        int chunkZ = Mathf.FloorToInt(bz / (float)Chunk.chunkSize);
 
         Chunk chunk = GetChunk(chunkX, chunkZ);
         if (chunk == null) return BlockType.Air;
 
-        int localX = worldX - chunkX * Chunk.chunkSize;
-        int localZ = worldZ - chunkZ * Chunk.chunkSize;
+        int localX = bx - chunkX * Chunk.chunkSize;
+        int localZ = bz - chunkZ * Chunk.chunkSize;
 
-        return chunk.GetBlock(localX, worldY, localZ);
+        return chunk.GetBlock(localX, by, localZ);
     }
 
-    // Para Chunk: øeste (worldX, worldZ) est· dentro de alguna ciudad?
     public bool TryGetCityForWorldXZ(float worldX, float worldZ, out CityData city)
     {
-        return cityManager.TryGetCityForWorldXZ(worldX, worldZ, Chunk.chunkSize, out city);
+        // CityManager opera en BLOQUES; convierte METROS ‚Üí BLOQUES para su consulta
+        float bx = worldX / Chunk.blockSize;
+        float bz = worldZ / Chunk.blockSize;
+        return cityManager.TryGetCityForWorldXZ(bx, bz, Chunk.chunkSize, out city);
     }
 
     public Biome GetBiomeForChunk(Vector2 chunkCoord)
@@ -195,7 +214,6 @@ public class WorldGenerator : MonoBehaviour
         yield return new WaitForEndOfFrame();
         if (player != null)
         {
-            // Evita ambig¸edad: usa explÌcitamente UnityEngine.Debug
             UnityEngine.Debug.Log("Mundo generado. Controles del jugador activados.");
             player.EnableControls();
         }

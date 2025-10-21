@@ -149,8 +149,14 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WorldGenerator
   player: {fileID: 999999997}
-  worldSizeInChunks: 10
+  playerTransform: {fileID: 999999998}
   chunkPrefab: {fileID: 1575844975945848528, guid: 0b1e5fdfa0ec10c4f9cc665ce1f0378a, type: 3}
+  cityPrefab: {fileID: 0}
+  seed: 12345
+  viewDistanceInChunks: 3
+  cityCount: 5
+  cityMinDistance: 40
+  cityMaxDistance: 80
 --- !u!4 &171628218
 Transform:
   m_ObjectHideFlags: 0
@@ -675,8 +681,14 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WorldGenerator
   player: {fileID: 0}
-  worldSizeInChunks: 10
+  playerTransform: {fileID: 0}
   chunkPrefab: {fileID: 1575844975945848528, guid: 0b1e5fdfa0ec10c4f9cc665ce1f0378a, type: 3}
+  cityPrefab: {fileID: 0}
+  seed: 12345
+  viewDistanceInChunks: 3
+  cityCount: 5
+  cityMinDistance: 40
+  cityMaxDistance: 80
 --- !u!4 &1834708829
 Transform:
   m_ObjectHideFlags: 0
