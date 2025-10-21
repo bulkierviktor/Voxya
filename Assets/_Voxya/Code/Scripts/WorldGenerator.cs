@@ -2,42 +2,80 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+[DisallowMultipleComponent]
 public class WorldGenerator : MonoBehaviour
 {
+    // Singleton para evitar duplicados sin usar APIs obsoletas
+    private static WorldGenerator instance;
+
     public PlayerController player;
     public Transform playerTransform;
 
     public GameObject chunkPrefab;
     public GameObject cityPrefab; // opcional: si null, usamos placeholder
 
-    // Escala del bloque en unidades de Unity (m). Para “1 bloque paisaje = 11 voxeles pequeños”, usa 1f/11f.
     [Min(0.02f)]
     public float blockSize = 1f / 11f;
 
-    // Terreno definido en METROS (para que no cambie la forma/altura al variar blockSize)
     [Min(1f)] public float terrainMaxHeightMeters = 20f;
     [Min(0.1f)] public float noiseScaleMeters = 25f;
 
-    // Autoajuste del radio de visión por metros objetivo
-    [Header("Auto View Distance")]
+    public int seed = 0;
+
+    // Radio visible (en chunks)
+    public int viewDistanceInChunks = 6;
+
+    // Autoajuste por metros visibles
     public bool autoAdjustViewDistance = true;
     [Min(5f)] public float targetVisibleWidthMeters = 80f;
-    public bool enableCityFlattening = true; // toggle de depuración
 
-    public int seed = 0;
-    public int viewDistanceInChunks = 6; // sube/ baja según rendimiento
+    // Generación y ciudades
     public int cityCount = 5;
-    public int cityMinDistance = 40;
-    public int cityMaxDistance = 80;
+    public int cityMinDistance = 120;
+    public int cityMaxDistance = 240;
+    public bool enableCityFlattening = true;
+
+    // Alisado de spikes
+    [Header("Streaming control")]
+    [Min(1)] public int maxChunksCreatedPerFrame = 2;
+    [Min(0)] public int preloadMarginChunks = 2;           // anillos extra al inicio
+    [Min(0)] public int colliderDistanceInChunks = 2;      // solo colliders cerca del jugador
+    public float updateScanInterval = 0.2f;                // frecuencia de escaneo
 
     private Dictionary<Vector2, Chunk> activeChunks = new Dictionary<Vector2, Chunk>();
-    private HashSet<Vector2> chunksRequested = new HashSet<Vector2>();
+    private HashSet<Vector2> enqueued = new HashSet<Vector2>();
+    private Queue<Vector2> toCreate = new Queue<Vector2>();
+    private Stack<GameObject> pool = new Stack<GameObject>();
+    private HashSet<Vector2> lastNeeded = new HashSet<Vector2>();
+
     private BiomeManager biomeManager;
     private CityManager cityManager;
     private WorldData worldData;
 
-    private Coroutine chunkCoroutine;
+    private Coroutine scanCoroutine;
+    private Coroutine buildWorker;
     private Transform citiesRoot;
+
+    void OnValidate()
+    {
+        // Propaga cambios del Inspector incluso en modo edición
+        Chunk.blockSize = Mathf.Max(0.02f, blockSize);
+        Chunk.terrainMaxHeightMeters = Mathf.Max(1f, terrainMaxHeightMeters);
+        Chunk.noiseScaleMeters = Mathf.Max(0.1f, noiseScaleMeters);
+        Chunk.enableCityFlattening = enableCityFlattening;
+    }
+
+    void Awake()
+    {
+        // Singleton sin llamadas obsoletas
+        if (instance != null && instance != this)
+        {
+            UnityEngine.Debug.LogWarning($"[WorldGenerator] Otra instancia detectada en '{name}'. Deshabilitando este componente.");
+            enabled = false;
+            return;
+        }
+        instance = this;
+    }
 
     void Start()
     {
@@ -45,17 +83,14 @@ public class WorldGenerator : MonoBehaviour
         Chunk.blockSize = Mathf.Max(0.02f, blockSize);
         Chunk.terrainMaxHeightMeters = Mathf.Max(1f, terrainMaxHeightMeters);
         Chunk.noiseScaleMeters = Mathf.Max(0.1f, noiseScaleMeters);
-
-        // Propaga toggle de aplanado
         Chunk.enableCityFlattening = enableCityFlattening;
 
-        // autoajustar viewDistance en función de blockSize y chunkSize
+        // Autoajustar viewDistance según metros deseados
         if (autoAdjustViewDistance)
         {
             float chunkMeters = Chunk.chunkSize * Chunk.blockSize;
-            // (2r + 1) * chunkMeters ≈ targetVisibleWidthMeters  =>  r ≈ ((target/chunkMeters) - 1) / 2
             int r = Mathf.Max(1, Mathf.RoundToInt((targetVisibleWidthMeters / Mathf.Max(0.001f, chunkMeters) - 1f) * 0.5f));
-            viewDistanceInChunks = Mathf.Clamp(r, 1, 32);
+            viewDistanceInChunks = Mathf.Clamp(r, 1, 48);
         }
 
         if (seed == 0)
@@ -65,30 +100,38 @@ public class WorldGenerator : MonoBehaviour
         cityManager = new CityManager(seed, cityCount, cityMinDistance, cityMaxDistance);
         cityManager.GenerateCities();
 
-        worldData = new WorldData(seed);
-        worldData.cities = new List<CityData>(cityManager.cities);
+        worldData = new WorldData(seed) { cities = new List<CityData>(cityManager.cities) };
 
         var citiesGO = GameObject.Find("Cities");
         if (citiesGO == null) citiesGO = new GameObject("Cities");
         citiesRoot = citiesGO.transform;
 
-        UnityEngine.Debug.Log($"[WorldGenerator] blockSize={Chunk.blockSize:F6}m, chunkMeters={Chunk.chunkSize * Chunk.blockSize:F3}m, targetWidth={targetVisibleWidthMeters}m, viewDistanceInChunks={viewDistanceInChunks}, seed={seed}");
+        UnityEngine.Debug.Log(
+            $"[WorldGenerator] blockSize={Chunk.blockSize:F6}m, chunkMeters={Chunk.chunkSize * Chunk.blockSize:F3}m, " +
+            $"targetWidth={targetVisibleWidthMeters}m, viewDistanceInChunks={viewDistanceInChunks}, " +
+            $"enableCityFlattening={enableCityFlattening}, cities={cityManager.cities.Count}, seed={seed}");
 
-        chunkCoroutine = StartCoroutine(ChunkUpdateCoroutine());
+        // Lanzar worker (creación repartida) y escaneo periódico
+        buildWorker = StartCoroutine(ChunkBuildWorker());
+        scanCoroutine = StartCoroutine(ScanLoop());
+
+        // Habilitar jugador tras primer frame
         StartCoroutine(EnablePlayerAfterWorldGen());
     }
 
-    private IEnumerator ChunkUpdateCoroutine()
+    private IEnumerator ScanLoop()
     {
-        UpdateChunksAroundPlayer();
+        // Primer escaneo con precarga
+        UpdateChunksAroundPlayer(prewarm: true);
+
         while (true)
         {
-            yield return new WaitForSeconds(0.2f);
-            UpdateChunksAroundPlayer();
+            yield return new WaitForSeconds(updateScanInterval);
+            UpdateChunksAroundPlayer(prewarm: false);
         }
     }
 
-    void UpdateChunksAroundPlayer()
+    void UpdateChunksAroundPlayer(bool prewarm)
     {
         if (playerTransform == null)
         {
@@ -96,73 +139,127 @@ public class WorldGenerator : MonoBehaviour
             else return;
         }
 
-        // Posición jugador en BLOQUES (no metros)
         int playerBlockX = Mathf.FloorToInt(playerTransform.position.x / Chunk.blockSize);
         int playerBlockZ = Mathf.FloorToInt(playerTransform.position.z / Chunk.blockSize);
         int pcx = Mathf.FloorToInt(playerBlockX / (float)Chunk.chunkSize);
         int pcz = Mathf.FloorToInt(playerBlockZ / (float)Chunk.chunkSize);
 
-        int r = viewDistanceInChunks;
-        HashSet<Vector2> needed = new HashSet<Vector2>();
+        int r = viewDistanceInChunks + (prewarm ? preloadMarginChunks : 0);
 
+        HashSet<Vector2> needed = new HashSet<Vector2>();
         for (int dx = -r; dx <= r; dx++)
         {
             for (int dz = -r; dz <= r; dz++)
             {
                 Vector2 coord = new Vector2(pcx + dx, pcz + dz);
                 needed.Add(coord);
-
-                if (!activeChunks.ContainsKey(coord) && !chunksRequested.Contains(coord))
+                if (!activeChunks.ContainsKey(coord) && !enqueued.Contains(coord))
                 {
-                    StartCoroutine(CreateChunkRoutine(coord));
-                    chunksRequested.Add(coord);
+                    enqueued.Add(coord);
+                    toCreate.Enqueue(coord);
                 }
             }
         }
 
-        var toRemove = new List<Vector2>();
+        // Devolver a pool los que ya no se necesitan
         foreach (var kv in activeChunks)
         {
             if (!needed.Contains(kv.Key))
             {
-                Destroy(kv.Value.gameObject);
-                toRemove.Add(kv.Key);
+                PoolChunk(kv.Key, kv.Value);
             }
         }
-        foreach (var c in toRemove) activeChunks.Remove(c);
+        foreach (var old in new List<Vector2>(activeChunks.Keys))
+            if (!needed.Contains(old)) activeChunks.Remove(old);
+
+        // Colliders solo cerca del jugador
+        foreach (var kv in activeChunks)
+        {
+            float dx = Mathf.Abs(kv.Key.x - pcx);
+            float dz = Mathf.Abs(kv.Key.y - pcz);
+            bool near = (dx <= colliderDistanceInChunks) && (dz <= colliderDistanceInChunks);
+            kv.Value.SetColliderEnabled(near);
+        }
+
+        lastNeeded = needed;
     }
 
-    private IEnumerator CreateChunkRoutine(Vector2 chunkCoord)
+    private IEnumerator ChunkBuildWorker()
     {
-        yield return null;
+        while (true)
+        {
+            int built = 0;
+            while (built < maxChunksCreatedPerFrame && toCreate.Count > 0)
+            {
+                var coord = toCreate.Dequeue();
+                CreateOrReuseChunk(coord);
+                enqueued.Remove(coord);
+                built++;
+                yield return null; // repartir carga
+            }
+            yield return null;
+        }
+    }
 
-        // Posición del chunk en METROS (unidades de Unity)
+    private void CreateOrReuseChunk(Vector2 chunkCoord)
+    {
         Vector3 worldPos = new Vector3(
             chunkCoord.x * Chunk.chunkSize * Chunk.blockSize,
             0,
             chunkCoord.y * Chunk.chunkSize * Chunk.blockSize
         );
 
-        GameObject go = Instantiate(chunkPrefab, worldPos, Quaternion.identity);
-        Chunk chunk = go.GetComponent<Chunk>();
+        GameObject go;
+        Chunk chunk;
+
+        if (pool.Count > 0)
+        {
+            go = pool.Pop();
+            go.transform.position = worldPos;
+            go.transform.rotation = Quaternion.identity;
+            go.SetActive(true);
+            chunk = go.GetComponent<Chunk>();
+        }
+        else
+        {
+            go = Instantiate(chunkPrefab, worldPos, Quaternion.identity);
+            chunk = go.GetComponent<Chunk>();
+        }
+
         if (chunk != null)
         {
             Biome biome = biomeManager.GetBiomeForChunk((int)chunkCoord.x, (int)chunkCoord.y);
             chunk.Initialize(this, chunkCoord, biome);
             activeChunks[chunkCoord] = chunk;
+
+            // Colliders cerca del jugador
+            bool withCol = false;
+            if (playerTransform != null)
+            {
+                int pcx = Mathf.FloorToInt(playerTransform.position.x / Chunk.blockSize / Chunk.chunkSize);
+                int pcz = Mathf.FloorToInt(playerTransform.position.z / Chunk.blockSize / Chunk.chunkSize);
+                float dx = Mathf.Abs(chunkCoord.x - pcx);
+                float dz = Mathf.Abs(chunkCoord.y - pcz);
+                withCol = (dx <= colliderDistanceInChunks) && (dz <= colliderDistanceInChunks);
+            }
+            chunk.SetColliderEnabled(withCol);
         }
 
         if (cityManager.TryGetCityCenterAtChunk(chunkCoord, out CityData city))
-        {
             SpawnCityCenterPlaceholder(city);
-        }
+    }
 
-        chunksRequested.Remove(chunkCoord);
+    private void PoolChunk(Vector2 key, Chunk chunk)
+    {
+        if (chunk == null) return;
+        var go = chunk.gameObject;
+        chunk.SetColliderEnabled(false);
+        go.SetActive(false);
+        pool.Push(go);
     }
 
     private void SpawnCityCenterPlaceholder(CityData city)
     {
-        // Centro en BLOQUES → convertir a METROS
         Vector2 centerBlocks = city.WorldCenterXZ(Chunk.chunkSize);
         float centerX = centerBlocks.x * Chunk.blockSize;
         float centerZ = centerBlocks.y * Chunk.blockSize;
@@ -196,7 +293,6 @@ public class WorldGenerator : MonoBehaviour
 
     public BlockType GetBlockAt(Vector3 worldPosition)
     {
-        // METROS → BLOQUES
         int bx = Mathf.FloorToInt(worldPosition.x / Chunk.blockSize);
         int by = Mathf.FloorToInt(worldPosition.y / Chunk.blockSize);
         int bz = Mathf.FloorToInt(worldPosition.z / Chunk.blockSize);
@@ -218,7 +314,6 @@ public class WorldGenerator : MonoBehaviour
 
     public bool TryGetCityForWorldXZ(float worldX, float worldZ, out CityData city)
     {
-        // CityManager opera en BLOQUES; convierte METROS → BLOQUES para su consulta
         float bx = worldX / Chunk.blockSize;
         float bz = worldZ / Chunk.blockSize;
         return cityManager.TryGetCityForWorldXZ(bx, bz, Chunk.chunkSize, out city);

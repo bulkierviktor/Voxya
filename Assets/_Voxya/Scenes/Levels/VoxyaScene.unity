@@ -153,13 +153,16 @@ MonoBehaviour:
   chunkPrefab: {fileID: 1575844975945848528, guid: 0b1e5fdfa0ec10c4f9cc665ce1f0378a, type: 3}
   cityPrefab: {fileID: 0}
   blockSize: 0.090909
-  terrainMaxHeightMeters: 20
-  noiseScaleMeters: 25
+  terrainMaxHeightMeters: 25
+  noiseScaleMeters: 30
+  autoAdjustViewDistance: 1
+  targetVisibleWidthMeters: 60
+  enableCityFlattening: 1
   seed: 0
-  viewDistanceInChunks: 6
-  cityCount: 5
-  cityMinDistance: 40
-  cityMaxDistance: 80
+  viewDistanceInChunks: 24
+  cityCount: 0
+  cityMinDistance: 120
+  cityMaxDistance: 240
 --- !u!4 &171628218
 Transform:
   m_ObjectHideFlags: 0
