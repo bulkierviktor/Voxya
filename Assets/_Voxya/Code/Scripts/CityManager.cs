@@ -1,4 +1,5 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
+using System.Diagnostics;
 using UnityEngine;
 
 public class CityManager
@@ -9,22 +10,38 @@ public class CityManager
     private readonly int minDistance;
     private readonly int maxDistance;
 
-    // Lista p�blica para que WorldGenerator pueda copiar a WorldData
+    private readonly WorldIndex regionIndex; // NUEVO: índice por regiones (opcional)
+    private readonly HashSet<Vector2Int> realizedRegions = new HashSet<Vector2Int>(); // regiones ya materializadas
+
+    // Lista pública para que WorldGenerator pueda copiar a WorldData
     public List<CityData> cities = new List<CityData>();
 
+    // Constructor clásico (sin índice) para compatibilidad
     public CityManager(int seed, int cityCount = 5, int minDistance = 40, int maxDistance = 80)
+        : this(seed, null, cityCount, minDistance, maxDistance) { }
+
+    // NUEVO: constructor con WorldIndex
+    public CityManager(int seed, WorldIndex index, int cityCount = 5, int minDistance = 40, int maxDistance = 80)
     {
         this.seed = seed;
         this.rng = new System.Random(seed);
         this.cityCount = cityCount;
         this.minDistance = minDistance;
         this.maxDistance = maxDistance;
+        this.regionIndex = index;
     }
 
-    // Debe ser p�blico (WorldGenerator lo invoca)
+    // Si hay WorldIndex, no pre‑generamos aquí; materializamos on‑demand.
     public void GenerateCities()
     {
         cities.Clear();
+
+        if (regionIndex != null)
+        {
+            // Con índice por regiones, no generes nada ahora.
+            // Se irán añadiendo con EnsureRegionCity(...) al acercarte.
+            return;
+        }
 
         int attemptsLimit = 10000;
         int attempts = 0;
@@ -61,7 +78,7 @@ public class CityManager
                 candidate = new CityData(cc, rad);
             }
 
-            // Verificar distancia m�nima entre ciudades (en chunks)
+            // Verificar distancia mínima entre ciudades (en chunks)
             bool ok = true;
             foreach (var c in cities)
             {
@@ -80,7 +97,7 @@ public class CityManager
         }
     }
 
-    // �Este chunk es el centro de una ciudad?
+    // ¿Este chunk es el centro de una ciudad?
     public bool TryGetCityCenterAtChunk(Vector2 chunkCoord, out CityData city)
     {
         foreach (var c in cities)
@@ -95,7 +112,7 @@ public class CityManager
         return false;
     }
 
-    // �Un punto del mundo (x,z) est� dentro del radio de alguna ciudad?
+    // ¿Un punto del mundo (x,z) está dentro del radio de alguna ciudad?
     public bool TryGetCityForWorldXZ(float worldX, float worldZ, int chunkSize, out CityData city)
     {
         foreach (var c in cities)
@@ -111,5 +128,46 @@ public class CityManager
         }
         city = null;
         return false;
+    }
+
+    // NUEVO: asegura materializar la ciudad de una región (si existe) de forma determinista
+    public void EnsureRegionCity(Vector2Int region, int chunkSize)
+    {
+        if (regionIndex == null) return;              // modo clásico sin índice
+        if (realizedRegions.Contains(region)) return; // ya procesada
+
+        var info = regionIndex.GetRegion(region);
+        realizedRegions.Add(region);
+
+        if (!info.hasCity) return;
+
+        // Posición de la ciudad en BLOQUES de mundo (determinista)
+        Vector2Int cityBlocks = regionIndex.RegionToWorldBlocks(region, info.cityLocalOffsetBlocks);
+
+        // Convertimos a coordenadas de chunk (enteras)
+        Vector2 centerChunk = new Vector2(
+            Mathf.FloorToInt(cityBlocks.x / (float)chunkSize),
+            Mathf.FloorToInt(cityBlocks.y / (float)chunkSize)
+        );
+
+        // Radio determinista 2..4 en chunks derivado de (seed, región)
+        int radiusChunks = 2 + (int)(Deterministic01(seed, region.x, region.y) * 3f);
+        radiusChunks = Mathf.Clamp(radiusChunks, 2, 4);
+
+        cities.Add(new CityData(centerChunk, radiusChunks));
+    }
+
+    private static float Deterministic01(int seed, int rx, int rz)
+    {
+        unchecked
+        {
+            uint h = (uint)seed;
+            h ^= (uint)(rx * 374761393);
+            h = (h << 5) | (h >> 27);
+            h ^= (uint)(rz * 668265263);
+            h *= 2246822519u;
+            // Mapear a [0,1)
+            return (h & 0x00FFFFFF) / (float)0x01000000;
+        }
     }
 }

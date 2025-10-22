@@ -1,14 +1,11 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-// Visualizador ligero para "minimapa" en mundo:
-// - Dibuja bordes de regiones y marca ciudades del WorldIndex alrededor del jugador.
-// Solo Gizmos (no UI). Para UI real, lo podemos portar a un Canvas más adelante.
 [ExecuteAlways]
 public class MinimapRegionGizmos : MonoBehaviour
 {
     public WorldGenerator world;
-    [Min(1)] public int regionRadius = 12;         // número de regiones alrededor
+    [Min(1)] public int regionRadius = 12;
     public Color regionGridColor = new Color(0f, 0f, 0f, 0.15f);
     public Color cityColor = new Color(1f, 0.5f, 0f, 0.9f);
     public float cityMarkerSizeMeters = 0.75f;
@@ -18,42 +15,31 @@ public class MinimapRegionGizmos : MonoBehaviour
         if (world == null || world.RegionIndex == null || world.playerTransform == null) return;
 
         var index = world.RegionIndex;
-
-        // Posición jugador en bloques y región
         int bx = Mathf.FloorToInt(world.playerTransform.position.x / Chunk.blockSize);
         int bz = Mathf.FloorToInt(world.playerTransform.position.z / Chunk.blockSize);
         Vector2Int currentRegion = index.WorldBlocksToRegion(new Vector2Int(bx, bz));
 
-        // Dibuja regiones y ciudades en un radio
         for (int dx = -regionRadius; dx <= regionRadius; dx++)
-        {
             for (int dz = -regionRadius; dz <= regionRadius; dz++)
             {
                 var r = new Vector2Int(currentRegion.x + dx, currentRegion.y + dz);
                 var info = index.GetRegion(r);
 
-                // Bordes de región
                 DrawRegionBounds(r, index.regionSizeBlocks);
 
-                // Ciudad (si existe)
                 if (info.hasCity)
                 {
                     Vector2Int cityBlocks = index.RegionToWorldBlocks(r, info.cityLocalOffsetBlocks);
-                    Vector3 posMeters = new Vector3(cityBlocks.x * Chunk.blockSize, 0f, cityBlocks.y * Chunk.blockSize);
-                    // Levanta el marcador un poco
-                    posMeters.y = 2f * Chunk.blockSize;
+                    Vector3 posMeters = new Vector3(cityBlocks.x * Chunk.blockSize, 2f * Chunk.blockSize, cityBlocks.y * Chunk.blockSize);
                     Gizmos.color = cityColor;
                     Gizmos.DrawSphere(posMeters, cityMarkerSizeMeters);
                 }
             }
-        }
     }
 
     private void DrawRegionBounds(Vector2Int region, int regionSizeBlocks)
     {
         Gizmos.color = regionGridColor;
-
-        // Esquina en metros
         float x0 = region.x * regionSizeBlocks * Chunk.blockSize;
         float z0 = region.y * regionSizeBlocks * Chunk.blockSize;
         float size = regionSizeBlocks * Chunk.blockSize;

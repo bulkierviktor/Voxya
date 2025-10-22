@@ -102,7 +102,14 @@ public class WorldGenerator : MonoBehaviour
         if (seed == 0)
             seed = UnityEngine.Random.Range(int.MinValue + 1, int.MaxValue);
 
+        // Inicializa managers
         biomeManager = new BiomeManager(seed);
+
+        // Primero crea el índice por regiones (usa la misma seed)
+        int regionSize = Chunk.chunkSize * 4;
+        RegionIndex = new WorldIndex(seed, regionSize);
+
+        // Ahora crea CityManager conectado al índice
         cityManager = new CityManager(seed, cityCount, cityMinDistance, cityMaxDistance);
         cityManager.GenerateCities();
 
@@ -221,6 +228,24 @@ public class WorldGenerator : MonoBehaviour
             0,
             chunkCoord.y * Chunk.chunkSize * Chunk.blockSize
         );
+
+        // Materializa ciudades deterministas de la(s) región(es) que cubre este chunk
+        if (RegionIndex != null && cityManager != null)
+        {
+            // Región del chunk actual (usa el origen del chunk en bloques)
+            int chunkBlockX = Mathf.FloorToInt(chunkCoord.x * Chunk.chunkSize);
+            int chunkBlockZ = Mathf.FloorToInt(chunkCoord.y * Chunk.chunkSize);
+            Vector2Int region = RegionIndex.WorldBlocksToRegion(new Vector2Int(chunkBlockX, chunkBlockZ));
+
+            // Asegura la región del chunk y vecinas (3x3) para evitar popping
+            for (int rx = -1; rx <= 1; rx++)
+            {
+                for (int rz = -1; rz <= 1; rz++)
+                {
+                    cityManager.EnsureRegionCity(new Vector2Int(region.x + rx, region.y + rz), Chunk.chunkSize);
+                }
+            }
+        }
 
         GameObject go;
         Chunk chunk;
