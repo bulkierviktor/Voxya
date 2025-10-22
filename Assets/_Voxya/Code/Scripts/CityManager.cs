@@ -1,5 +1,5 @@
 ﻿using System.Collections.Generic;
-using System.Diagnostics;
+// using System.Diagnostics; // QUITADO para evitar ambigüedad con Debug
 using UnityEngine;
 
 public class CityManager
@@ -10,17 +10,14 @@ public class CityManager
     private readonly int minDistance;
     private readonly int maxDistance;
 
-    private readonly WorldIndex regionIndex; // NUEVO: índice por regiones (opcional)
-    private readonly HashSet<Vector2Int> realizedRegions = new HashSet<Vector2Int>(); // regiones ya materializadas
+    private readonly WorldIndex regionIndex; // índice por regiones (opcional)
+    private readonly HashSet<Vector2Int> realizedRegions = new HashSet<Vector2Int>(); // regiones materializadas
 
-    // Lista pública para que WorldGenerator pueda copiar a WorldData
     public List<CityData> cities = new List<CityData>();
 
-    // Constructor clásico (sin índice) para compatibilidad
     public CityManager(int seed, int cityCount = 5, int minDistance = 40, int maxDistance = 80)
         : this(seed, null, cityCount, minDistance, maxDistance) { }
 
-    // NUEVO: constructor con WorldIndex
     public CityManager(int seed, WorldIndex index, int cityCount = 5, int minDistance = 40, int maxDistance = 80)
     {
         this.seed = seed;
@@ -31,73 +28,45 @@ public class CityManager
         this.regionIndex = index;
     }
 
-    // Si hay WorldIndex, no pre‑generamos aquí; materializamos on‑demand.
+    // NUEVO: 5 ciudades deterministas en anillos crecientes (en coordenadas de CHUNK)
+    // - radios en chunks: 12, 36, 64, 96, 140 (creciente y con buen espaciado)
+    // - ángulos deterministas por seed bien repartidos
     public void GenerateCities()
     {
         cities.Clear();
+        realizedRegions.Clear();
 
-        if (regionIndex != null)
+        int[] radiiChunks = new int[] { 12, 36, 64, 96, 140 };
+        if (cityCount != radiiChunks.Length)
         {
-            // Con índice por regiones, no generes nada ahora.
-            // Se irán añadiendo con EnsureRegionCity(...) al acercarte.
-            return;
+            // Ajusta si el inspector pide otro número
+            radiiChunks = new int[cityCount];
+            int baseR = 12;
+            int step = 24;
+            for (int i = 0; i < cityCount; i++)
+                radiiChunks[i] = baseR + step * i + (i >= 3 ? (i - 2) * 10 : 0); // crece un poco más a partir de la 4ª
         }
 
-        int attemptsLimit = 10000;
-        int attempts = 0;
-
-        while (cities.Count < cityCount && attempts < attemptsLimit)
+        // ángulos repartidos alrededor del círculo, con ligera variación por seed
+        float golden = 2.399963229728653f; // golden angle en radianes
+        for (int i = 0; i < radiiChunks.Length; i++)
         {
-            attempts++;
+            float baseAngle = i * golden; // bien repartido
+            float jitter = ((float)rng.NextDouble() - 0.5f) * 0.35f; // pequeña variación
+            float angle = baseAngle + jitter;
 
-            CityData candidate;
+            int r = radiiChunks[i];
+            Vector2 c = new Vector2(
+                Mathf.RoundToInt(Mathf.Cos(angle) * r),
+                Mathf.RoundToInt(Mathf.Sin(angle) * r)
+            );
 
-            if (cities.Count == 0)
-            {
-                // Primera ciudad cerca del spawn: 3..6 chunks
-                int firstRadius = rng.Next(3, 7);
-                float firstAngle = (float)(rng.NextDouble() * Mathf.PI * 2f);
-
-                Vector2 cc = new Vector2(
-                    Mathf.RoundToInt(Mathf.Cos(firstAngle) * firstRadius),
-                    Mathf.RoundToInt(Mathf.Sin(firstAngle) * firstRadius)
-                );
-                int rad = rng.Next(2, 5); // 2..4
-                candidate = new CityData(cc, rad);
-            }
-            else
-            {
-                int radiusChunksFromOrigin = rng.Next(minDistance, maxDistance + 1);
-                float angle = (float)(rng.NextDouble() * Mathf.PI * 2f);
-
-                Vector2 cc = new Vector2(
-                    Mathf.RoundToInt(Mathf.Cos(angle) * radiusChunksFromOrigin),
-                    Mathf.RoundToInt(Mathf.Sin(angle) * radiusChunksFromOrigin)
-                );
-                int rad = rng.Next(2, 5);
-                candidate = new CityData(cc, rad);
-            }
-
-            // Verificar distancia mínima entre ciudades (en chunks)
-            bool ok = true;
-            foreach (var c in cities)
-            {
-                if (Vector2.Distance(c.centerChunk, candidate.centerChunk) < minDistance)
-                {
-                    ok = false; break;
-                }
-            }
-
-            if (ok) cities.Add(candidate);
-        }
-
-        if (cities.Count < cityCount)
-        {
-            Debug.LogWarning($"CityManager: solo pudo generar {cities.Count}/{cityCount} ciudades (seed {seed}).");
+            // Radio propio de la ciudad en chunks (2..4)
+            int radiusChunks = 2 + (i % 3); // 2,3,4,2,3...
+            cities.Add(new CityData(c, radiusChunks));
         }
     }
 
-    // ¿Este chunk es el centro de una ciudad?
     public bool TryGetCityCenterAtChunk(Vector2 chunkCoord, out CityData city)
     {
         foreach (var c in cities)
@@ -112,7 +81,6 @@ public class CityManager
         return false;
     }
 
-    // ¿Un punto del mundo (x,z) está dentro del radio de alguna ciudad?
     public bool TryGetCityForWorldXZ(float worldX, float worldZ, int chunkSize, out CityData city)
     {
         foreach (var c in cities)
@@ -130,27 +98,22 @@ public class CityManager
         return false;
     }
 
-    // NUEVO: asegura materializar la ciudad de una región (si existe) de forma determinista
     public void EnsureRegionCity(Vector2Int region, int chunkSize)
     {
-        if (regionIndex == null) return;              // modo clásico sin índice
-        if (realizedRegions.Contains(region)) return; // ya procesada
+        if (regionIndex == null) return;
+        if (realizedRegions.Contains(region)) return;
 
         var info = regionIndex.GetRegion(region);
         realizedRegions.Add(region);
-
         if (!info.hasCity) return;
 
-        // Posición de la ciudad en BLOQUES de mundo (determinista)
         Vector2Int cityBlocks = regionIndex.RegionToWorldBlocks(region, info.cityLocalOffsetBlocks);
 
-        // Convertimos a coordenadas de chunk (enteras)
         Vector2 centerChunk = new Vector2(
             Mathf.FloorToInt(cityBlocks.x / (float)chunkSize),
             Mathf.FloorToInt(cityBlocks.y / (float)chunkSize)
         );
 
-        // Radio determinista 2..4 en chunks derivado de (seed, región)
         int radiusChunks = 2 + (int)(Deterministic01(seed, region.x, region.y) * 3f);
         radiusChunks = Mathf.Clamp(radiusChunks, 2, 4);
 
@@ -166,7 +129,6 @@ public class CityManager
             h = (h << 5) | (h >> 27);
             h ^= (uint)(rz * 668265263);
             h *= 2246822519u;
-            // Mapear a [0,1)
             return (h & 0x00FFFFFF) / (float)0x01000000;
         }
     }

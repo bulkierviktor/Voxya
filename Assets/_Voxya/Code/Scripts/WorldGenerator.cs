@@ -9,7 +9,7 @@ public class WorldGenerator : MonoBehaviour
 
     // WorldGenerator.cs (campos)
     public WorldIndex RegionIndex { get; private set; }
-
+    public System.Collections.Generic.IReadOnlyList<CityData> Cities => cityManager?.cities;
     public PlayerController player;
     public Transform playerTransform;
 
@@ -66,6 +66,8 @@ public class WorldGenerator : MonoBehaviour
     private bool ccWasEnabled = true;
     private bool playerControllerWasEnabled = true;
 
+    private readonly HashSet<Vector2> spawnedCityCenters = new HashSet<Vector2>();
+
     void OnValidate()
     {
         Chunk.blockSize = Mathf.Max(0.02f, blockSize);
@@ -106,7 +108,7 @@ public class WorldGenerator : MonoBehaviour
         biomeManager = new BiomeManager(seed);
 
         // Primero crea el índice por regiones (usa la misma seed)
-        int regionSize = Chunk.chunkSize * 4;
+        int regionSize = Chunk.chunkSize * 8;
         RegionIndex = new WorldIndex(seed, regionSize);
 
         // Ahora crea CityManager conectado al índice
@@ -293,6 +295,11 @@ public class WorldGenerator : MonoBehaviour
 
     private void SpawnCityCenterPlaceholder(CityData city)
     {
+        // Evitar duplicados
+        if (spawnedCityCenters.Contains(city.centerChunk))
+            return;
+        spawnedCityCenters.Add(city.centerChunk);
+
         Vector2 centerBlocks = city.WorldCenterXZ(Chunk.chunkSize);
         float centerX = centerBlocks.x * Chunk.blockSize;
         float centerZ = centerBlocks.y * Chunk.blockSize;
@@ -379,7 +386,7 @@ public class WorldGenerator : MonoBehaviour
                 rbKinematicWasEnabled = playerRb.isKinematic;
                 playerRb.useGravity = false;
                 playerRb.isKinematic = true;
-                playerRb.Velocity = Vector3.zero;
+                playerRb.linearVelocity = Vector3.zero;
                 playerRb.angularVelocity = Vector3.zero;
             }
 
@@ -475,7 +482,7 @@ public class WorldGenerator : MonoBehaviour
         {
             playerRb.isKinematic = rbKinematicWasEnabled;
             playerRb.useGravity = rbGravityWasEnabled;
-            playerRb.Velocity = Vector3.zero;
+            playerRb.linearVelocity = Vector3.zero;
             playerRb.angularVelocity = Vector3.zero;
         }
         if (player != null)
@@ -570,7 +577,7 @@ public class WorldGenerator : MonoBehaviour
     }
 
     // Encola coords ordenados por distancia al centro(pcx, pcz)
-private void EnqueueNewCoordsRadial(HashSet<Vector2> needed, int pcx, int pcz)
+    private void EnqueueNewCoordsRadial(HashSet<Vector2> needed, int pcx, int pcz)
     {
         // candidatos = los que aún no están activos ni encolados
         var candidates = new List<Vector2>();
@@ -580,22 +587,42 @@ private void EnqueueNewCoordsRadial(HashSet<Vector2> needed, int pcx, int pcz)
                 candidates.Add(coord);
         }
 
-        // orden radial (distancia al centro), con desempate estable
+        // Dirección de mirada del jugador en el plano XZ (en coords de chunk)
+        Vector2 forward = Vector2.up; // por defecto +Z
+        if (playerTransform != null)
+        {
+            Vector3 f = playerTransform.forward;
+            forward = new Vector2(f.x, f.z);
+            if (forward.sqrMagnitude < 1e-4f) forward = Vector2.up;
+            else forward.Normalize();
+        }
+
+        // Orden: 1) anillo (Chebyshev), 2) ángulo con el forward (menor primero), 3) distancia euclídea
         candidates.Sort((a, b) =>
         {
-            float dax = a.x - pcx, daz = a.y - pcz;
-            float dbx = b.x - pcx, dbz = b.y - pcz;
-            float da2 = dax * dax + daz * daz;
-            float db2 = dbx * dbx + dbz * dbz;
-            int cmp = da2.CompareTo(db2);
+            float ax = a.x - pcx, az = a.y - pcz;
+            float bx = b.x - pcx, bz = b.y - pcz;
+
+            int ringA = (int)Mathf.Max(Mathf.Abs(ax), Mathf.Abs(az));
+            int ringB = (int)Mathf.Max(Mathf.Abs(bx), Mathf.Abs(bz));
+            int cmp = ringA.CompareTo(ringB);
             if (cmp != 0) return cmp;
-            // desempate consistente por X y luego Z
-            cmp = a.x.CompareTo(b.x);
+
+            // Dentro del mismo anillo, prioriza el arco frontal
+            Vector2 da = new Vector2(ax, az);
+            Vector2 db = new Vector2(bx, bz);
+            float angScoreA = 1f - Vector2.Dot(forward, da.sqrMagnitude > 1e-4f ? da.normalized : Vector2.zero);
+            float angScoreB = 1f - Vector2.Dot(forward, db.sqrMagnitude > 1e-4f ? db.normalized : Vector2.zero);
+            cmp = angScoreA.CompareTo(angScoreB);
             if (cmp != 0) return cmp;
-            return a.y.CompareTo(b.y);
+
+            // Desempate por distancia real
+            float d2a = ax * ax + az * az;
+            float d2b = bx * bx + bz * bz;
+            return d2a.CompareTo(d2b);
         });
 
-        // encola en orden radial
+        // Encola en ese orden
         foreach (var c in candidates)
         {
             enqueued.Add(c);

@@ -13,6 +13,14 @@ public class Chunk : MonoBehaviour
     public static float terrainMaxHeightMeters = 20f;
     public static float noiseScaleMeters = 25f;
     public static bool enableCityFlattening = true;
+    public static int noiseOctaves = 4;
+    public static float noiseLacunarity = 2.0f;
+    public static float noiseGain = 0.5f;
+    public static float warpScaleMeters = 60f;
+    public static float warpStrengthMeters = 12f;
+    // Suavizado extra para praderas
+    public static int plainsSmoothIterations = 2;
+    public static float plainsSmoothFactor = 0.5f;
 
     public WorldGenerator world;
     public Vector2 chunkPosition;
@@ -46,18 +54,22 @@ public class Chunk : MonoBehaviour
 
     void PopulateVoxelMap()
     {
+        // Factor de relieve por bioma (reduce amplitud en praderas)
         float heightMultiplier = 1f;
         switch (biome)
         {
-            case Biome.Plains: heightMultiplier = 1f; break;
-            case Biome.Hills: heightMultiplier = 1.35f; break;
+            case Biome.Plains: heightMultiplier = 0.65f; break; // más plano
+            case Biome.Hills: heightMultiplier = 1.25f; break;
             case Biome.Desert: heightMultiplier = 0.8f; break;
             case Biome.Snow: heightMultiplier = 0.9f; break;
-            case Biome.Forest: heightMultiplier = 1.1f; break;
+            case Biome.Forest: heightMultiplier = 1.0f; break;
         }
 
         float desiredBorderMeters = 4f;
         float smoothBorderBlocks = Mathf.Max(1f, desiredBorderMeters / Mathf.Max(0.0001f, blockSize));
+
+        // 1) Alturas base en un grid 2D
+        int[,] heights = new int[chunkSize, chunkSize];
 
         for (int x = 0; x < chunkSize; x++)
         {
@@ -69,6 +81,7 @@ public class Chunk : MonoBehaviour
                 int baseHeight = GetTerrainHeight(worldXBlocks, worldZBlocks);
                 int targetHeight = Mathf.RoundToInt(baseHeight * heightMultiplier);
 
+                // Aplanado de ciudad (con borde suave)
                 if (enableCityFlattening &&
                     world.TryGetCityForWorldXZ(worldXBlocks * blockSize, worldZBlocks * blockSize, out CityData city))
                 {
@@ -87,11 +100,46 @@ public class Chunk : MonoBehaviour
                     }
                 }
 
+                heights[x, z] = Mathf.Clamp(targetHeight, 0, chunkHeight - 1);
+            }
+        }
+
+        // 2) Suavizado local para praderas (reduce cortes bruscos)
+        if (biome == Biome.Plains && plainsSmoothIterations > 0)
+        {
+            for (int it = 0; it < plainsSmoothIterations; it++)
+            {
+                for (int x = 0; x < chunkSize; x++)
+                {
+                    for (int z = 0; z < chunkSize; z++)
+                    {
+                        int sum = 0, cnt = 0;
+                        for (int ox = -1; ox <= 1; ox++)
+                            for (int oz = -1; oz <= 1; oz++)
+                            {
+                                int nx = x + ox, nz = z + oz;
+                                if (nx < 0 || nx >= chunkSize || nz < 0 || nz >= chunkSize) continue;
+                                sum += heights[nx, nz];
+                                cnt++;
+                            }
+                        int avg = (cnt > 0) ? Mathf.RoundToInt(sum / (float)cnt) : heights[x, z];
+                        heights[x, z] = Mathf.RoundToInt(Mathf.Lerp(heights[x, z], avg, plainsSmoothFactor));
+                    }
+                }
+            }
+        }
+
+        // 3) Relleno voxel en columnas
+        for (int x = 0; x < chunkSize; x++)
+        {
+            for (int z = 0; z < chunkSize; z++)
+            {
+                int h = heights[x, z];
                 for (int y = 0; y < chunkHeight; y++)
                 {
-                    if (y == targetHeight - 1) voxelMap[x, y, z] = BlockType.Grass;
-                    else if (y < targetHeight - 1 && y > targetHeight - 5) voxelMap[x, y, z] = BlockType.Dirt;
-                    else if (y <= targetHeight - 5) voxelMap[x, y, z] = BlockType.Stone;
+                    if (y == h - 1) voxelMap[x, y, z] = BlockType.Grass;
+                    else if (y < h - 1 && y > h - 5) voxelMap[x, y, z] = BlockType.Dirt;
+                    else if (y <= h - 5) voxelMap[x, y, z] = BlockType.Stone;
                     else voxelMap[x, y, z] = BlockType.Air;
                 }
             }
@@ -100,19 +148,32 @@ public class Chunk : MonoBehaviour
 
     public static int GetTerrainHeight(float worldX, float worldZ)
     {
+        // worldX/worldZ vienen en BLOQUES; convertimos a metros
         float xMeters = worldX * blockSize;
         float zMeters = worldZ * blockSize;
 
-        float noiseX = xMeters / Mathf.Max(0.0001f, noiseScaleMeters);
-        float noiseZ = zMeters / Mathf.Max(0.0001f, noiseScaleMeters);
-        float perlinValue = Mathf.PerlinNoise(noiseX, noiseZ);
+        // Domain warp leve (rompe patrones rectos)
+        float wx = xMeters + warpStrengthMeters * (Mathf.PerlinNoise(xMeters / warpScaleMeters, zMeters / warpScaleMeters) - 0.5f);
+        float wz = zMeters + warpStrengthMeters * (Mathf.PerlinNoise((xMeters + 100f) / warpScaleMeters, (zMeters + 100f) / warpScaleMeters) - 0.5f);
+
+        // fBm
+        float freq = 1f / Mathf.Max(0.0001f, noiseScaleMeters);
+        float amp = 1f, sum = 0f, norm = 0f;
+        for (int i = 0; i < noiseOctaves; i++)
+        {
+            sum += amp * Mathf.PerlinNoise(wx * freq, wz * freq);
+            norm += amp;
+            amp *= noiseGain;
+            freq *= noiseLacunarity;
+        }
+        float fbm = (norm > 0f) ? sum / norm : 0f;
 
         int terrainMaxHeightBlocks = Mathf.Clamp(
             Mathf.RoundToInt(terrainMaxHeightMeters / Mathf.Max(0.0001f, blockSize)),
             1, chunkHeight
         );
 
-        return Mathf.RoundToInt(perlinValue * terrainMaxHeightBlocks);
+        return Mathf.RoundToInt(fbm * terrainMaxHeightBlocks);
     }
 
     void GenerateChunkMesh()

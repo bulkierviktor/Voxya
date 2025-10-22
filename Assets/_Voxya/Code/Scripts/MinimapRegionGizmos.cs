@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using UnityEngine;
 
 [ExecuteAlways]
@@ -12,29 +11,32 @@ public class MinimapRegionGizmos : MonoBehaviour
 
     void OnDrawGizmos()
     {
-        if (world == null || world.RegionIndex == null || world.playerTransform == null) return;
+        if (world == null || world.playerTransform == null) return;
 
-        var index = world.RegionIndex;
-        int bx = Mathf.FloorToInt(world.playerTransform.position.x / Chunk.blockSize);
-        int bz = Mathf.FloorToInt(world.playerTransform.position.z / Chunk.blockSize);
-        Vector2Int currentRegion = index.WorldBlocksToRegion(new Vector2Int(bx, bz));
+        // Dibuja cuadrícula de regiones si existe RegionIndex
+        if (world.RegionIndex != null)
+        {
+            var index = world.RegionIndex;
+            int bx = Mathf.FloorToInt(world.playerTransform.position.x / Chunk.blockSize);
+            int bz = Mathf.FloorToInt(world.playerTransform.position.z / Chunk.blockSize);
+            Vector2Int currentRegion = index.WorldBlocksToRegion(new Vector2Int(bx, bz));
 
-        for (int dx = -regionRadius; dx <= regionRadius; dx++)
-            for (int dz = -regionRadius; dz <= regionRadius; dz++)
-            {
-                var r = new Vector2Int(currentRegion.x + dx, currentRegion.y + dz);
-                var info = index.GetRegion(r);
+            for (int dx = -regionRadius; dx <= regionRadius; dx++)
+                for (int dz = -regionRadius; dz <= regionRadius; dz++)
+                    DrawRegionBounds(new Vector2Int(currentRegion.x + dx, currentRegion.y + dz), index.regionSizeBlocks);
+        }
 
-                DrawRegionBounds(r, index.regionSizeBlocks);
+        // Dibuja ciudades reales del CityManager
+        var cities = world.Cities;
+        if (cities == null) return;
 
-                if (info.hasCity)
-                {
-                    Vector2Int cityBlocks = index.RegionToWorldBlocks(r, info.cityLocalOffsetBlocks);
-                    Vector3 posMeters = new Vector3(cityBlocks.x * Chunk.blockSize, 2f * Chunk.blockSize, cityBlocks.y * Chunk.blockSize);
-                    Gizmos.color = cityColor;
-                    Gizmos.DrawSphere(posMeters, cityMarkerSizeMeters);
-                }
-            }
+        Gizmos.color = cityColor;
+        foreach (var c in cities)
+        {
+            Vector2 centerBlocks = c.WorldCenterXZ(Chunk.chunkSize);
+            Vector3 posMeters = new Vector3(centerBlocks.x * Chunk.blockSize, 2f * Chunk.blockSize, centerBlocks.y * Chunk.blockSize);
+            Gizmos.DrawSphere(posMeters, cityMarkerSizeMeters);
+        }
     }
 
     private void DrawRegionBounds(Vector2Int region, int regionSizeBlocks)
