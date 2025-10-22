@@ -111,9 +111,9 @@ public sealed class WorldIndex
         return x ^ (x >> 31);
     }
 
-    private readonly struct Rng64
+    private struct Rng64
     {
-        ulong s;
+        private ulong s;
         public Rng64(ulong seed) { s = seed; }
         public ulong NextU64() { s = SplitMix64(s); return s; }
         public float Next01() => (NextU64() >> 8) * (1.0f / (1UL << 56)); // [0,1)

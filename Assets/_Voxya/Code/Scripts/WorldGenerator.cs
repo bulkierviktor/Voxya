@@ -110,7 +110,7 @@ public class WorldGenerator : MonoBehaviour
         RegionIndex = new WorldIndex(seed, regionSize);
 
         // Ahora crea CityManager conectado al índice
-        cityManager = new CityManager(seed, cityCount, cityMinDistance, cityMaxDistance);
+        cityManager = new CityManager(seed, RegionIndex, cityCount, cityMinDistance, cityMaxDistance);
         cityManager.GenerateCities();
 
         worldData = new WorldData(seed) { cities = new List<CityData>(cityManager.cities) };
@@ -118,10 +118,6 @@ public class WorldGenerator : MonoBehaviour
         var citiesGO = GameObject.Find("Cities");
         if (citiesGO == null) citiesGO = new GameObject("Cities");
         citiesRoot = citiesGO.transform;
-
-        // Tamaño de región por defecto: 4 chunks x 16 bloques = 64 bloques
-        int regionSize = Chunk.chunkSize * 4;
-        RegionIndex = new WorldIndex(seed, regionSize);
 
         UnityEngine.Debug.Log(
             $"[WorldGenerator] blockSize={Chunk.blockSize:F6}m, chunkMeters={Chunk.chunkSize * Chunk.blockSize:F3}m, " +
@@ -383,7 +379,7 @@ public class WorldGenerator : MonoBehaviour
                 rbKinematicWasEnabled = playerRb.isKinematic;
                 playerRb.useGravity = false;
                 playerRb.isKinematic = true;
-                playerRb.linearVelocity = Vector3.zero;
+                playerRb.Velocity = Vector3.zero;
                 playerRb.angularVelocity = Vector3.zero;
             }
 
@@ -479,7 +475,7 @@ public class WorldGenerator : MonoBehaviour
         {
             playerRb.isKinematic = rbKinematicWasEnabled;
             playerRb.useGravity = rbGravityWasEnabled;
-            playerRb.linearVelocity = Vector3.zero;
+            playerRb.Velocity = Vector3.zero;
             playerRb.angularVelocity = Vector3.zero;
         }
         if (player != null)
