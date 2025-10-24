@@ -153,16 +153,25 @@ MonoBehaviour:
   chunkPrefab: {fileID: 1575844975945848528, guid: 0b1e5fdfa0ec10c4f9cc665ce1f0378a, type: 3}
   cityPrefab: {fileID: 0}
   blockSize: 0.090909
-  terrainMaxHeightMeters: 25
-  noiseScaleMeters: 30
+  terrainMaxHeightMeters: 18
+  noiseScaleMeters: 60
+  seed: 0
+  viewDistanceInChunks: 28
   autoAdjustViewDistance: 1
   targetVisibleWidthMeters: 60
-  enableCityFlattening: 1
-  seed: 0
-  viewDistanceInChunks: 24
   cityCount: 0
   cityMinDistance: 120
   cityMaxDistance: 240
+  enableCityFlattening: 1
+  maxChunksCreatedPerFrame: 4
+  preloadMarginChunks: 2
+  colliderDistanceInChunks: 2
+  updateScanInterval: 0.15
+  waitSpawnAreaReady: 1
+  spawnEnsureRadiusChunks: 2
+  spawnYOffsetBlocks: 2
+  spawnCheckInterval: 0.05
+  spawnTimeoutSeconds: 6
 --- !u!4 &171628218
 Transform:
   m_ObjectHideFlags: 0
@@ -530,6 +539,55 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1331723043
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1331723045}
+  - component: {fileID: 1331723044}
+  m_Layer: 0
+  m_Name: MinimapGizmos
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1331723044
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1331723043}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bbf9bae147cc7e04fa5f1c3ff04e4fc7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MinimapRegionGizmos
+  world: {fileID: 171628217}
+  regionRadius: 12
+  regionGridColor: {r: 0, g: 0, b: 0, a: 0.15}
+  cityColor: {r: 1, g: 0.5, b: 0, a: 0.9}
+  cityMarkerSizeMeters: 0.75
+--- !u!4 &1331723045
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1331723043}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1820485541
 GameObject:
   m_ObjectHideFlags: 0
@@ -665,3 +723,4 @@ SceneRoots:
   - {fileID: 1820485544}
   - {fileID: 171628218}
   - {fileID: 1311014600}
+  - {fileID: 1331723045}

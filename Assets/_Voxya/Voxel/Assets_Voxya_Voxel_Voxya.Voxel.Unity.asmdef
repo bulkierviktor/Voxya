@@ -1,0 +1,14 @@
+{
+  "name": "Voxya.Voxel.Unity",
+  "references": [
+    "Voxya.Voxel.Core"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "versionDefines": [],
+  "noEngineReferences": false
+}

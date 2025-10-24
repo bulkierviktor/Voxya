@@ -3,24 +3,24 @@
   "WorkspaceRootPath": "C:\\Users\\vmane\\Documents\\Projects\\Voyxa\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\vmane\\Documents\\Projects\\Voyxa\\Assets\\_Voxya\\Code\\Scripts\\WorldIndex.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:Assets\\_Voxya\\Code\\Scripts\\WorldIndex.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
       "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\vmane\\Documents\\Projects\\Voyxa\\Assets\\_Voxya\\Code\\Scripts\\WorldGenerator.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:Assets\\_Voxya\\Code\\Scripts\\WorldGenerator.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\vmane\\Documents\\Projects\\Voyxa\\Assets\\_Voxya\\Code\\Scripts\\CityManager.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:Assets\\_Voxya\\Code\\Scripts\\CityManager.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\vmane\\Documents\\Projects\\Voyxa\\Assets\\_Voxya\\Code\\Scripts\\MinimapRegionGizmos.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:Assets\\_Voxya\\Code\\Scripts\\MinimapRegionGizmos.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\vmane\\Documents\\Projects\\Voyxa\\Assets\\_Voxya\\Code\\Scripts\\CityManager.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:Assets\\_Voxya\\Code\\Scripts\\CityManager.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
       "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\vmane\\Documents\\Projects\\Voyxa\\Assets\\_Voxya\\Code\\Scripts\\Chunk.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:Assets\\_Voxya\\Code\\Scripts\\Chunk.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\vmane\\Documents\\Projects\\Voyxa\\Assets\\_Voxya\\Code\\Scripts\\WorldIndex.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:Assets\\_Voxya\\Code\\Scripts\\WorldIndex.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\vmane\\Documents\\Projects\\Voyxa\\Assets\\_Voxya\\Code\\Scripts\\CityData.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
@@ -42,43 +42,43 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 1,
+          "SelectedChildIndex": 2,
           "Children": [
             {
               "$type": "Document",
-              "DocumentIndex": 3,
+              "DocumentIndex": 1,
               "Title": "MinimapRegionGizmos.cs",
               "DocumentMoniker": "C:\\Users\\vmane\\Documents\\Projects\\Voyxa\\Assets\\_Voxya\\Code\\Scripts\\MinimapRegionGizmos.cs",
               "RelativeDocumentMoniker": "Assets\\_Voxya\\Code\\Scripts\\MinimapRegionGizmos.cs",
               "ToolTip": "C:\\Users\\vmane\\Documents\\Projects\\Voyxa\\Assets\\_Voxya\\Code\\Scripts\\MinimapRegionGizmos.cs",
               "RelativeToolTip": "Assets\\_Voxya\\Code\\Scripts\\MinimapRegionGizmos.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAADgAAAABAAAAAAAAAA==",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAADoAAAABAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2025-10-22T09:26:44.148Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 0,
+              "DocumentIndex": 4,
               "Title": "WorldIndex.cs",
               "DocumentMoniker": "C:\\Users\\vmane\\Documents\\Projects\\Voyxa\\Assets\\_Voxya\\Code\\Scripts\\WorldIndex.cs",
               "RelativeDocumentMoniker": "Assets\\_Voxya\\Code\\Scripts\\WorldIndex.cs",
               "ToolTip": "C:\\Users\\vmane\\Documents\\Projects\\Voyxa\\Assets\\_Voxya\\Code\\Scripts\\WorldIndex.cs",
               "RelativeToolTip": "Assets\\_Voxya\\Code\\Scripts\\WorldIndex.cs",
-              "ViewState": "AgIAAFwAAAAAAAAAAAAqwIAAAAABAAAAAAAAAA==",
+              "ViewState": "AgIAAFsAAAAAAAAAAAAqwIAAAAABAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2025-10-22T08:36:19.421Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 1,
+              "DocumentIndex": 0,
               "Title": "WorldGenerator.cs",
               "DocumentMoniker": "C:\\Users\\vmane\\Documents\\Projects\\Voyxa\\Assets\\_Voxya\\Code\\Scripts\\WorldGenerator.cs",
               "RelativeDocumentMoniker": "Assets\\_Voxya\\Code\\Scripts\\WorldGenerator.cs",
               "ToolTip": "C:\\Users\\vmane\\Documents\\Projects\\Voyxa\\Assets\\_Voxya\\Code\\Scripts\\WorldGenerator.cs",
               "RelativeToolTip": "Assets\\_Voxya\\Code\\Scripts\\WorldGenerator.cs",
-              "ViewState": "AgIAAGABAAAAAAAAAAAawH0BAAAZAAAAAAAAAA==",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAsAAABcAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2025-10-15T21:06:38.259Z",
               "EditorCaption": ""
@@ -91,7 +91,7 @@
               "RelativeDocumentMoniker": "Assets\\_Voxya\\Code\\Scripts\\CityManager.cs",
               "ToolTip": "C:\\Users\\vmane\\Documents\\Projects\\Voyxa\\Assets\\_Voxya\\Code\\Scripts\\CityManager.cs",
               "RelativeToolTip": "Assets\\_Voxya\\Code\\Scripts\\CityManager.cs",
-              "ViewState": "AgIAAEsAAAAAAAAAAAAAAHAAAAAFAAAAAAAAAA==",
+              "ViewState": "AgIAAC0AAAAAAAAAAAAAAFMAAAAFAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2025-10-20T23:12:44.739Z",
               "EditorCaption": ""
@@ -110,15 +110,16 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 4,
+              "DocumentIndex": 3,
               "Title": "Chunk.cs",
               "DocumentMoniker": "C:\\Users\\vmane\\Documents\\Projects\\Voyxa\\Assets\\_Voxya\\Code\\Scripts\\Chunk.cs",
               "RelativeDocumentMoniker": "Assets\\_Voxya\\Code\\Scripts\\Chunk.cs",
               "ToolTip": "C:\\Users\\vmane\\Documents\\Projects\\Voyxa\\Assets\\_Voxya\\Code\\Scripts\\Chunk.cs",
               "RelativeToolTip": "Assets\\_Voxya\\Code\\Scripts\\Chunk.cs",
-              "ViewState": "AgIAABUAAAAAAAAAAAAAAP4AAAABAAAAAAAAAA==",
+              "ViewState": "AgIAACEAAAAAAAAAAAAqwJIAAAAFAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-10-15T20:58:30.965Z"
+              "WhenOpened": "2025-10-15T20:58:30.965Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",

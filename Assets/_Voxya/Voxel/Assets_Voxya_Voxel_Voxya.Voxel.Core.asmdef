@@ -1,0 +1,12 @@
+{
+  "name": "Voxya.Voxel.Core",
+  "references": [],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "versionDefines": [],
+  "noEngineReferences": false
+}
