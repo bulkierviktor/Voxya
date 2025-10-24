@@ -2,10 +2,11 @@ using UnityEngine;
 
 namespace Voxya.Voxel.Core
 {
-    // Greedy meshing (Lysenko) con plano correcto por cara:
-    // - Front (a!=Air, b==Air) en q+1
-    // - Back  (a==Air, b!=Air) en q
-    // y con winding/normales consistentes.
+    // Greedy meshing (Lysenko) correcto:
+    // - Slices 0..dims[d], comparando a = x - q y b = x.
+    // - b != Air => cara "front" en plano x (normal +d)
+    // - a != Air => cara "back"  en plano x-1 (normal -d)
+    // - u y v = ejes restantes, du y dv se construyen en esos ejes (w y h).
     public class GreedyMesher : IMesher
     {
         public MeshData BuildMesh(VoxelChunkData c, VoxelWorldConfig cfg)
@@ -17,80 +18,84 @@ namespace Voxya.Voxel.Core
             return md;
         }
 
-        private void GreedyAxis(MeshData md, VoxelChunkData c, VoxelWorldConfig cfg, int axis)
+        private void GreedyAxis(MeshData md, VoxelChunkData c, VoxelWorldConfig cfg, int d)
         {
             int N = c.Size;
             int H = c.Height;
             int[] dims = { N, H, N };
 
-            int u = (axis + 1) % 3;
-            int v = (axis + 2) % 3;
+            int u = (d + 1) % 3; // eje horizontal de la máscara
+            int v = (d + 2) % 3; // eje vertical de la máscara
 
             var mask = new BlockType[dims[u] * dims[v]];
+
+            int[] x = { 0, 0, 0 };
             int[] q = { 0, 0, 0 };
-            q[axis] = 1;
+            q[d] = 1;
 
-            for (int xq = -1; xq < dims[axis];)
+            // Recorre slices 0..dims[d]
+            for (x[d] = 0; x[d] <= dims[d]; x[d]++)
             {
-                // Construye máscara entre el slice xq y xq+1
-                int idx = 0;
-                for (int j = 0; j < dims[v]; j++)
+                // Construir máscara
+                int n = 0;
+                for (x[v] = 0; x[v] < dims[v]; x[v]++)
                 {
-                    for (int i = 0; i < dims[u]; i++)
+                    for (x[u] = 0; x[u] < dims[u]; x[u]++)
                     {
-                        int[] p = { 0, 0, 0 };
-                        p[axis] = xq; p[u] = i; p[v] = j;
+                        BlockType a = (x[d] > 0)
+                            ? Sample(c, x[0] - q[0], x[1] - q[1], x[2] - q[2])
+                            : BlockType.Air;
+                        BlockType b = (x[d] < dims[d])
+                            ? Sample(c, x[0], x[1], x[2])
+                            : BlockType.Air;
 
-                        BlockType a = Sample(c, p[0], p[1], p[2]);
-                        BlockType b = Sample(c, p[0] + q[0], p[1] + q[1], p[2] + q[2]);
-
-                        // >0 = front (+axis), <0 = back (-axis)
-                        mask[idx++] =
-                            (a != BlockType.Air && b == BlockType.Air) ? a :
-                            (a == BlockType.Air && b != BlockType.Air) ? (BlockType)(-(int)b) :
-                            BlockType.Air;
+                        if ((a != BlockType.Air) == (b != BlockType.Air))
+                            mask[n++] = BlockType.Air;
+                        else
+                            mask[n++] = (b != BlockType.Air) ? b : (BlockType)(-(int)a);
                     }
                 }
 
-                // Avanza el slice; las caras "front" van en xq (ya incrementado), "back" en xq-1
-                xq++;
-
-                // Consume rectángulos máximos en la máscara
-                idx = 0;
+                // Consumir la máscara en rectángulos máximos
+                n = 0;
                 for (int j = 0; j < dims[v]; j++)
                 {
                     for (int i = 0; i < dims[u];)
                     {
-                        BlockType bt = mask[idx];
-                        if (bt == BlockType.Air) { i++; idx++; continue; }
+                        BlockType bt = mask[n];
+                        if (bt == BlockType.Air) { i++; n++; continue; }
 
-                        int w;
-                        for (w = 1; i + w < dims[u] && mask[idx + w] == bt; w++) { }
+                        // Ancho en u
+                        int w = 1;
+                        while (i + w < dims[u] && mask[n + w] == bt) w++;
 
-                        int h;
+                        // Alto en v
+                        int h = 1;
                         bool stop = false;
-                        for (h = 1; j + h < dims[v]; h++)
+                        while (j + h < dims[v] && !stop)
                         {
                             for (int k = 0; k < w; k++)
-                                if (mask[idx + k + h * dims[u]] != bt) { stop = true; break; }
-                            if (stop) break;
+                            {
+                                if (mask[n + k + h * dims[u]] != bt) { stop = true; break; }
+                            }
+                            if (!stop) h++;
                         }
 
-                        // Limpia la máscara del rectángulo consumido
+                        // Limpia el rectángulo consumido
                         for (int jj = 0; jj < h; jj++)
                             for (int ii = 0; ii < w; ii++)
-                                mask[idx + ii + jj * dims[u]] = BlockType.Air;
+                                mask[n + ii + jj * dims[u]] = BlockType.Air;
 
                         bool backFace = ((int)bt) < 0;
                         BlockType mat = backFace ? (BlockType)(-(int)bt) : bt;
 
-                        // Plano correcto según front/back
-                        int qPlane = xq - (backFace ? 1 : 0);
+                        // Plano correcto: front en x[d], back en x[d]-1
+                        int plane = x[d] - (backFace ? 1 : 0);
 
-                        AppendQuad(md, cfg, axis, qPlane, i, j, w, h, backFace, mat);
+                        AppendQuad(md, cfg, d, plane, u, v, i, j, w, h, backFace, mat);
 
                         i += w;
-                        idx += w;
+                        n += w;
                     }
                 }
             }
@@ -103,40 +108,25 @@ namespace Voxya.Voxel.Core
             return c.Get(x, y, z);
         }
 
-        // Emite un quad en el plano 'qPlane' del 'axis', con rectángulo (i..i+w, j..j+h) en ejes u/v.
+        // Emite un quad en plano 'plane' del eje d; rectángulo (i..i+w, j..j+h) en ejes u y v.
         private static void AppendQuad(MeshData md, VoxelWorldConfig cfg,
-                                       int axis, int qPlane, int i, int j, int w, int h,
+                                       int d, int plane, int u, int v,
+                                       int i, int j, int w, int h,
                                        bool backFace, BlockType mat)
         {
             float s = cfg.BlockSizeMeters;
 
-            // axis X: plano x = q; u=z, v=y  -> p=(q,j,i), du=(0,0,w), dv=(0,h,0)
-            // axis Y: plano y = q; u=x, v=z  -> p=(i,q,j), du=(w,0,0), dv=(0,0,h)
-            // axis Z: plano z = q; u=x, v=y  -> p=(i,j,q), du=(w,0,0), dv=(0,h,0)
-            Vector3 p, du, dv, nrm;
-            switch (axis)
-            {
-                case 0:
-                    p = new Vector3(qPlane, j, i);
-                    du = new Vector3(0, 0, w);
-                    dv = new Vector3(0, h, 0);
-                    nrm = backFace ? Vector3.left : Vector3.right;
-                    break;
-                case 1:
-                    p = new Vector3(i, qPlane, j);
-                    du = new Vector3(w, 0, 0);
-                    dv = new Vector3(0, 0, h);
-                    nrm = backFace ? Vector3.down : Vector3.up;
-                    break;
-                default:
-                    p = new Vector3(i, j, qPlane);
-                    du = new Vector3(w, 0, 0);
-                    dv = new Vector3(0, h, 0);
-                    nrm = backFace ? Vector3.back : Vector3.forward;
-                    break;
-            }
+            // pos[d]=plane; pos[u]=i; pos[v]=j
+            int[] pos = { 0, 0, 0 };
+            pos[d] = plane; pos[u] = i; pos[v] = j;
 
-            p *= s; du *= s; dv *= s;
+            Vector3 p = new Vector3(pos[0] * s, pos[1] * s, pos[2] * s);
+
+            Vector3 du = Vector3.zero, dv = Vector3.zero;
+            // du en eje u (w celdas)
+            if (u == 0) du.x = w * s; else if (u == 1) du.y = w * s; else du.z = w * s;
+            // dv en eje v (h celdas)
+            if (v == 0) dv.x = h * s; else if (v == 1) dv.y = h * s; else dv.z = h * s;
 
             Vector3 v0 = p;
             Vector3 v1 = p + du;
@@ -146,6 +136,13 @@ namespace Voxya.Voxel.Core
             int vb = md.vertices.Count;
             md.vertices.Add(v0); md.vertices.Add(v1); md.vertices.Add(v2); md.vertices.Add(v3);
 
+            // Normal ±d
+            Vector3 nrm = Vector3.zero;
+            if (d == 0) nrm.x = backFace ? -1f : 1f;
+            else if (d == 1) nrm.y = backFace ? -1f : 1f;
+            else nrm.z = backFace ? -1f : 1f;
+
+            // Triángulos (front CCW, back invertido)
             if (!backFace)
             {
                 md.triangles.Add(vb + 0); md.triangles.Add(vb + 1); md.triangles.Add(vb + 2);
