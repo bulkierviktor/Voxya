@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace Voxya.Voxel.Core
 {
-    // Implementación compacta de Greedy Meshing para bloques cúbicos
+    // Implementación de Greedy Meshing con winding corregido para evitar “huecos”
     public class GreedyMesher : IMesher
     {
         public MeshData BuildMesh(VoxelChunkData c, VoxelWorldConfig cfg)
@@ -14,7 +14,6 @@ namespace Voxya.Voxel.Core
             return md;
         }
 
-        // Algoritmo: por cada eje, barrer slices 2D, fusionar rectángulos de caras contiguas con mismo material
         private void GreedyAxis(MeshData md, VoxelChunkData c, VoxelWorldConfig cfg, int axis)
         {
             int N = c.Size;
@@ -23,12 +22,9 @@ namespace Voxya.Voxel.Core
             int v = (axis + 2) % 3;
 
             int[] dims = { N, H, N };
-            int duX = 0, duY = 0, duZ = 0;
-            int dvX = 0, dvY = 0, dvZ = 0;
-
             var mask = new BlockType[dims[u] * dims[v]];
 
-            int x, y, z, i, j, k, n, m;
+            int i, j, k, n, m;
 
             int[] q = { 0, 0, 0 };
             q[axis] = 1;
@@ -40,8 +36,6 @@ namespace Voxya.Voxel.Core
                 {
                     for (i = 0; i < dims[u]; i++)
                     {
-                        BlockType a, b;
-
                         int[] p = { 0, 0, 0 };
                         p[axis] = q[axis];
                         p[u] = i; p[v] = j;
@@ -49,9 +43,9 @@ namespace Voxya.Voxel.Core
                         BlockType va = Sample(c, p[0], p[1], p[2]);
                         BlockType vb = Sample(c, p[0] + q[0], p[1] + q[1], p[2] + q[2]);
 
-                        a = va; b = vb;
-                        mask[idx++] = (a != BlockType.Air && b == BlockType.Air) ? a :
-                                      (b != BlockType.Air && a == BlockType.Air) ? (BlockType)(-(int)b) :
+                        // Nota: negativo en mask => cara hacia “dentro” (backFace)
+                        mask[idx++] = (va != BlockType.Air && vb == BlockType.Air) ? va :
+                                      (vb != BlockType.Air && va == BlockType.Air) ? (BlockType)(-(int)vb) :
                                       BlockType.Air;
                     }
                 }
@@ -66,10 +60,10 @@ namespace Voxya.Voxel.Core
                         BlockType bt = mask[idx];
                         if (bt == BlockType.Air) { i++; idx++; continue; }
 
-                        // Calcular ancho
+                        // Ancho
                         for (n = 1; i + n < dims[u] && mask[idx + n] == bt; n++) { }
 
-                        // Calcular alto
+                        // Alto
                         bool done = false;
                         for (m = 1; j + m < dims[v]; m++)
                         {
@@ -82,15 +76,8 @@ namespace Voxya.Voxel.Core
 
                         // Marcar consumido
                         for (int jj = 0; jj < m; jj++)
-                        {
                             for (int ii = 0; ii < n; ii++)
                                 mask[idx + ii + jj * dims[u]] = BlockType.Air;
-                        }
-
-                        // Construir quad
-                        duX = duY = duZ = 0; dvX = dvY = dvZ = 0;
-                        if (u == 0) duX = n; else if (u == 1) duY = n; else duZ = n;
-                        if (v == 0) dvX = m; else if (v == 1) dvY = m; else dvZ = m;
 
                         int[] p0 = { 0, 0, 0 };
                         p0[axis] = q[axis];
@@ -100,9 +87,7 @@ namespace Voxya.Voxel.Core
                         BlockType mat = backFace ? (BlockType)(-(int)bt) : bt;
 
                         AppendQuad(md, cfg, p0[0], p0[1], p0[2],
-                                   duX, duY, duZ,
-                                   dvX, dvY, dvZ,
-                                   axis, backFace, mat);
+                                   n, m, axis, backFace, mat);
 
                         i += n; idx += n;
                     }
@@ -117,51 +102,85 @@ namespace Voxya.Voxel.Core
             return c.Get(x, y, z);
         }
 
-        private static void AppendQuad(MeshData md, VoxelWorldConfig cfg, int x, int y, int z,
-                                       int duX, int duY, int duZ,
-                                       int dvX, int dvY, int dvZ,
+        // Winding fijo + inversión de triángulos si backFace
+        private static void AppendQuad(MeshData md, VoxelWorldConfig cfg,
+                                       int px, int py, int pz,
+                                       int width, int height,
                                        int axis, bool backFace, BlockType mat)
         {
-            // Convertir a metros
-            Vector3 origin = new(x * cfg.BlockSizeMeters, y * cfg.BlockSizeMeters, z * cfg.BlockSizeMeters);
-            Vector3 du = new(duX * cfg.BlockSizeMeters, duY * cfg.BlockSizeMeters, duZ * cfg.BlockSizeMeters);
-            Vector3 dv = new(dvX * cfg.BlockSizeMeters, dvY * cfg.BlockSizeMeters, dvZ * cfg.BlockSizeMeters);
+            // Construcción en coordenadas de vóxel
+            Vector3 origin = new(px * cfg.BlockSizeMeters, py * cfg.BlockSizeMeters, pz * cfg.BlockSizeMeters);
+
+            // Ejes locales u/v según axis
+            Vector3 u = axis switch
+            {
+                0 => new Vector3(0, 0, 1), // X: barrido en Z
+                1 => new Vector3(1, 0, 0), // Y: barrido en X
+                _ => new Vector3(1, 0, 0)  // Z: barrido en X
+            };
+            Vector3 v = axis switch
+            {
+                0 => new Vector3(0, 1, 0), // X: barrido en Y
+                1 => new Vector3(0, 0, 1), // Y: barrido en Z
+                _ => new Vector3(0, 1, 0)  // Z: barrido en Y
+            };
+
+            // Escalar u/v por tamaño del rectángulo y por tamaño de bloque
+            u *= width * cfg.BlockSizeMeters;
+            v *= height * cfg.BlockSizeMeters;
+
+            // Para caras “positivas” desplazamos una unidad en el eje principal
+            Vector3 normal = axis switch
+            {
+                0 => Vector3.right,
+                1 => Vector3.up,
+                _ => Vector3.forward
+            };
+            if (backFace) normal = -normal;
+
+            // Desplazar el plano al lado correcto
+            Vector3 planeOffset = (axis switch
+            {
+                0 => new Vector3(backFace ? 0 : cfg.BlockSizeMeters, 0, 0),
+                1 => new Vector3(0, backFace ? 0 : cfg.BlockSizeMeters, 0),
+                _ => new Vector3(0, 0, backFace ? 0 : cfg.BlockSizeMeters),
+            });
+
+            Vector3 p0 = origin + planeOffset;
+            Vector3 p1 = p0 + u;
+            Vector3 p2 = p0 + u + v;
+            Vector3 p3 = p0 + v;
 
             int vbase = md.vertices.Count;
+            md.vertices.Add(p0);
+            md.vertices.Add(p1);
+            md.vertices.Add(p2);
+            md.vertices.Add(p3);
 
+            // Winding: CCW = cara frontal. Si es backFace, invertimos
             if (!backFace)
             {
-                md.vertices.Add(origin);
-                md.vertices.Add(origin + du);
-                md.vertices.Add(origin + du + dv);
-                md.vertices.Add(origin + dv);
+                md.triangles.Add(vbase + 0);
+                md.triangles.Add(vbase + 1);
+                md.triangles.Add(vbase + 2);
+                md.triangles.Add(vbase + 0);
+                md.triangles.Add(vbase + 2);
+                md.triangles.Add(vbase + 3);
             }
             else
             {
-                md.vertices.Add(origin);
-                md.vertices.Add(origin + dv);
-                md.vertices.Add(origin + du + dv);
-                md.vertices.Add(origin + du);
+                md.triangles.Add(vbase + 0);
+                md.triangles.Add(vbase + 2);
+                md.triangles.Add(vbase + 1);
+                md.triangles.Add(vbase + 0);
+                md.triangles.Add(vbase + 3);
+                md.triangles.Add(vbase + 2);
             }
 
-            // Triángulos
-            md.triangles.Add(vbase + 0);
-            md.triangles.Add(vbase + 1);
-            md.triangles.Add(vbase + 2);
-            md.triangles.Add(vbase + 0);
-            md.triangles.Add(vbase + 2);
-            md.triangles.Add(vbase + 3);
-
             // Normales planas
-            Vector3 n = axis switch
-            {
-                0 => (backFace ? Vector3.left : Vector3.right),
-                1 => (backFace ? Vector3.down : Vector3.up),
-                _ => (backFace ? Vector3.back : Vector3.forward),
-            };
-            md.normals.Add(n); md.normals.Add(n); md.normals.Add(n); md.normals.Add(n);
+            md.normals.Add(normal); md.normals.Add(normal); md.normals.Add(normal); md.normals.Add(normal);
 
-            // UVs muy simples por material (atlas 2x3 ejemplo)
+            // UVs (atlas 2x3)
             Vector2 uv = mat switch
             {
                 BlockType.Grass => new Vector2(0, 2),
@@ -169,11 +188,11 @@ namespace Voxya.Voxel.Core
                 BlockType.Stone => new Vector2(1, 0),
                 BlockType.Sand => new Vector2(0, 1),
                 BlockType.Snow => new Vector2(0, 0),
-                _ => new Vector2(1, 1)
+                _ => new Vector2(1, 2)
             };
             const float invW = 0.5f, invH = 1f / 3f;
-
             float ux = uv.x * invW, uy = uv.y * invH;
+
             md.uvs.Add(new Vector2(ux, uy));
             md.uvs.Add(new Vector2(ux + invW, uy));
             md.uvs.Add(new Vector2(ux + invW, uy + invH));
