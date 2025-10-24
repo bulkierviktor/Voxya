@@ -17,9 +17,9 @@ MonoBehaviour:
   BlockSizeMeters: 0.09090909
   Seed: 12345
   ViewDistanceInChunks: 10
-  UpdateScanInterval: 0.15
+  UpdateScanInterval: 0.1
   TerrainMaxHeightMeters: 18
-  MaxBuildsPerFrame: 4
+  MaxBuildsPerFrame: 5
   PreloadMargin: 2
-  ColliderDistance: 2
-  EnableSaveLoad: 1
+  ColliderDistance: 4
+  EnableSaveLoad: 0

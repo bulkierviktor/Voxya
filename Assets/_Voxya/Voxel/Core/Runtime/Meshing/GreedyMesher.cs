@@ -2,15 +2,18 @@ using UnityEngine;
 
 namespace Voxya.Voxel.Core
 {
-    // Greedy Meshing con winding correcto y plano de la cara en q (sin offset +1 bloque)
+    // Greedy meshing (Lysenko) con plano correcto por cara:
+    // - Front (a!=Air, b==Air) en q+1
+    // - Back  (a==Air, b!=Air) en q
+    // y con winding/normales consistentes.
     public class GreedyMesher : IMesher
     {
         public MeshData BuildMesh(VoxelChunkData c, VoxelWorldConfig cfg)
         {
             var md = new MeshData();
-            GreedyAxis(md, c, cfg, axis: 0); // X
-            GreedyAxis(md, c, cfg, axis: 1); // Y
-            GreedyAxis(md, c, cfg, axis: 2); // Z
+            GreedyAxis(md, c, cfg, 0); // X
+            GreedyAxis(md, c, cfg, 1); // Y
+            GreedyAxis(md, c, cfg, 2); // Z
             return md;
         }
 
@@ -18,77 +21,76 @@ namespace Voxya.Voxel.Core
         {
             int N = c.Size;
             int H = c.Height;
+            int[] dims = { N, H, N };
+
             int u = (axis + 1) % 3;
             int v = (axis + 2) % 3;
 
-            int[] dims = { N, H, N };
             var mask = new BlockType[dims[u] * dims[v]];
-
-            int i, j, k, n, m;
-
             int[] q = { 0, 0, 0 };
             q[axis] = 1;
 
-            for (q[axis] = -1; q[axis] < dims[axis];)
+            for (int xq = -1; xq < dims[axis];)
             {
+                // Construye máscara entre el slice xq y xq+1
                 int idx = 0;
-                for (j = 0; j < dims[v]; j++)
+                for (int j = 0; j < dims[v]; j++)
                 {
-                    for (i = 0; i < dims[u]; i++)
+                    for (int i = 0; i < dims[u]; i++)
                     {
                         int[] p = { 0, 0, 0 };
-                        p[axis] = q[axis];
-                        p[u] = i; p[v] = j;
+                        p[axis] = xq; p[u] = i; p[v] = j;
 
-                        BlockType va = Sample(c, p[0], p[1], p[2]);
-                        BlockType vb = Sample(c, p[0] + q[0], p[1] + q[1], p[2] + q[2]);
+                        BlockType a = Sample(c, p[0], p[1], p[2]);
+                        BlockType b = Sample(c, p[0] + q[0], p[1] + q[1], p[2] + q[2]);
 
-                        // positivo => cara hacia +axis (frente); negativo => cara hacia -axis (backFace)
-                        mask[idx++] = (va != BlockType.Air && vb == BlockType.Air) ? va :
-                                      (vb != BlockType.Air && va == BlockType.Air) ? (BlockType)(-(int)vb) :
-                                      BlockType.Air;
+                        // >0 = front (+axis), <0 = back (-axis)
+                        mask[idx++] =
+                            (a != BlockType.Air && b == BlockType.Air) ? a :
+                            (a == BlockType.Air && b != BlockType.Air) ? (BlockType)(-(int)b) :
+                            BlockType.Air;
                     }
                 }
 
-                q[axis]++;
+                // Avanza el slice; las caras "front" van en xq (ya incrementado), "back" en xq-1
+                xq++;
 
+                // Consume rectángulos máximos en la máscara
                 idx = 0;
-                for (j = 0; j < dims[v]; j++)
+                for (int j = 0; j < dims[v]; j++)
                 {
-                    for (i = 0; i < dims[u];)
+                    for (int i = 0; i < dims[u];)
                     {
                         BlockType bt = mask[idx];
                         if (bt == BlockType.Air) { i++; idx++; continue; }
 
-                        // Ancho (u)
-                        for (n = 1; i + n < dims[u] && mask[idx + n] == bt; n++) { }
+                        int w;
+                        for (w = 1; i + w < dims[u] && mask[idx + w] == bt; w++) { }
 
-                        // Alto (v)
-                        bool done = false;
-                        for (m = 1; j + m < dims[v]; m++)
+                        int h;
+                        bool stop = false;
+                        for (h = 1; j + h < dims[v]; h++)
                         {
-                            for (k = 0; k < n; k++)
-                            {
-                                if (mask[idx + k + m * dims[u]] != bt) { done = true; break; }
-                            }
-                            if (done) break;
+                            for (int k = 0; k < w; k++)
+                                if (mask[idx + k + h * dims[u]] != bt) { stop = true; break; }
+                            if (stop) break;
                         }
 
-                        // Consumir bloque
-                        for (int jj = 0; jj < m; jj++)
-                            for (int ii = 0; ii < n; ii++)
+                        // Limpia la máscara del rectángulo consumido
+                        for (int jj = 0; jj < h; jj++)
+                            for (int ii = 0; ii < w; ii++)
                                 mask[idx + ii + jj * dims[u]] = BlockType.Air;
-
-                        int[] p0 = { 0, 0, 0 };
-                        p0[axis] = q[axis]; // el plano está en q (sin offset extra)
-                        p0[u] = i; p0[v] = j;
 
                         bool backFace = ((int)bt) < 0;
                         BlockType mat = backFace ? (BlockType)(-(int)bt) : bt;
 
-                        AppendQuad(md, cfg, p0[0], p0[1], p0[2], n, m, axis, backFace, mat);
+                        // Plano correcto según front/back
+                        int qPlane = xq - (backFace ? 1 : 0);
 
-                        i += n; idx += n;
+                        AppendQuad(md, cfg, axis, qPlane, i, j, w, h, backFace, mat);
+
+                        i += w;
+                        idx += w;
                     }
                 }
             }
@@ -101,89 +103,74 @@ namespace Voxya.Voxel.Core
             return c.Get(x, y, z);
         }
 
-        // Construcción del quad: plano en q, du/dv en ejes u/v; sin offset +1 bloque
+        // Emite un quad en el plano 'qPlane' del 'axis', con rectángulo (i..i+w, j..j+h) en ejes u/v.
         private static void AppendQuad(MeshData md, VoxelWorldConfig cfg,
-                                       int px, int py, int pz,
-                                       int width, int height,
-                                       int axis, bool backFace, BlockType mat)
+                                       int axis, int qPlane, int i, int j, int w, int h,
+                                       bool backFace, BlockType mat)
         {
             float s = cfg.BlockSizeMeters;
 
-            // origen del plano en coordenadas mundo
-            Vector3 origin = new Vector3(px * s, py * s, pz * s);
-
-            // du en eje u, dv en eje v
-            Vector3 du = Vector3.zero;
-            Vector3 dv = Vector3.zero;
-            switch ((axis + 1) % 3) // u
-            {
-                case 0: du.x = width * s; break;
-                case 1: du.y = width * s; break;
-                case 2: du.z = width * s; break;
-            }
-            switch ((axis + 2) % 3) // v
-            {
-                case 0: dv.x = height * s; break;
-                case 1: dv.y = height * s; break;
-                case 2: dv.z = height * s; break;
-            }
-
-            // normal hacia +axis o -axis
-            Vector3 normal = Vector3.zero;
+            // axis X: plano x = q; u=z, v=y  -> p=(q,j,i), du=(0,0,w), dv=(0,h,0)
+            // axis Y: plano y = q; u=x, v=z  -> p=(i,q,j), du=(w,0,0), dv=(0,0,h)
+            // axis Z: plano z = q; u=x, v=y  -> p=(i,j,q), du=(w,0,0), dv=(0,h,0)
+            Vector3 p, du, dv, nrm;
             switch (axis)
             {
-                case 0: normal.x = backFace ? -1f : 1f; break;
-                case 1: normal.y = backFace ? -1f : 1f; break;
-                case 2: normal.z = backFace ? -1f : 1f; break;
+                case 0:
+                    p = new Vector3(qPlane, j, i);
+                    du = new Vector3(0, 0, w);
+                    dv = new Vector3(0, h, 0);
+                    nrm = backFace ? Vector3.left : Vector3.right;
+                    break;
+                case 1:
+                    p = new Vector3(i, qPlane, j);
+                    du = new Vector3(w, 0, 0);
+                    dv = new Vector3(0, 0, h);
+                    nrm = backFace ? Vector3.down : Vector3.up;
+                    break;
+                default:
+                    p = new Vector3(i, j, qPlane);
+                    du = new Vector3(w, 0, 0);
+                    dv = new Vector3(0, h, 0);
+                    nrm = backFace ? Vector3.back : Vector3.forward;
+                    break;
             }
 
-            // vértices (orden p0, p1, p2, p3)
-            Vector3 p0 = origin;
-            Vector3 p1 = origin + du;
-            Vector3 p2 = origin + du + dv;
-            Vector3 p3 = origin + dv;
+            p *= s; du *= s; dv *= s;
 
-            int vbase = md.vertices.Count;
-            md.vertices.Add(p0);
-            md.vertices.Add(p1);
-            md.vertices.Add(p2);
-            md.vertices.Add(p3);
+            Vector3 v0 = p;
+            Vector3 v1 = p + du;
+            Vector3 v2 = p + du + dv;
+            Vector3 v3 = p + dv;
 
-            // winding CCW para cara frontal; invertido si backFace
+            int vb = md.vertices.Count;
+            md.vertices.Add(v0); md.vertices.Add(v1); md.vertices.Add(v2); md.vertices.Add(v3);
+
             if (!backFace)
             {
-                md.triangles.Add(vbase + 0);
-                md.triangles.Add(vbase + 1);
-                md.triangles.Add(vbase + 2);
-                md.triangles.Add(vbase + 0);
-                md.triangles.Add(vbase + 2);
-                md.triangles.Add(vbase + 3);
+                md.triangles.Add(vb + 0); md.triangles.Add(vb + 1); md.triangles.Add(vb + 2);
+                md.triangles.Add(vb + 0); md.triangles.Add(vb + 2); md.triangles.Add(vb + 3);
             }
             else
             {
-                md.triangles.Add(vbase + 0);
-                md.triangles.Add(vbase + 2);
-                md.triangles.Add(vbase + 1);
-                md.triangles.Add(vbase + 0);
-                md.triangles.Add(vbase + 3);
-                md.triangles.Add(vbase + 2);
+                md.triangles.Add(vb + 0); md.triangles.Add(vb + 2); md.triangles.Add(vb + 1);
+                md.triangles.Add(vb + 0); md.triangles.Add(vb + 3); md.triangles.Add(vb + 2);
             }
 
-            // normales planas
-            md.normals.Add(normal); md.normals.Add(normal); md.normals.Add(normal); md.normals.Add(normal);
+            md.normals.Add(nrm); md.normals.Add(nrm); md.normals.Add(nrm); md.normals.Add(nrm);
 
             // UVs (atlas 2x3)
-            Vector2 uv = mat switch
+            Vector2 cell = mat switch
             {
                 BlockType.Grass => new Vector2(0, 2),
                 BlockType.Dirt => new Vector2(1, 1),
                 BlockType.Stone => new Vector2(1, 0),
                 BlockType.Sand => new Vector2(0, 1),
                 BlockType.Snow => new Vector2(0, 0),
-                _ => new Vector2(1, 2) // Extra
+                _ => new Vector2(1, 2)
             };
             const float invW = 0.5f, invH = 1f / 3f;
-            float ux = uv.x * invW, uy = uv.y * invH;
+            float ux = cell.x * invW, uy = cell.y * invH;
 
             md.uvs.Add(new Vector2(ux, uy));
             md.uvs.Add(new Vector2(ux + invW, uy));

@@ -7,6 +7,18 @@
       "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:Assets\\_Voxya\\Voxel\\Core\\Runtime\\Meshing\\GreedyMesher.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\vmane\\Documents\\Projects\\Voyxa\\Assets\\_Voxya\\Voxel\\Editor\\VoxelCacheTools.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:Assets\\_Voxya\\Voxel\\Editor\\VoxelCacheTools.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\vmane\\Documents\\Projects\\Voyxa\\Assets\\_Voxya\\Voxel\\Editor\\CreateVoxelAtlas2x3.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:Assets\\_Voxya\\Voxel\\Editor\\CreateVoxelAtlas2x3.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\vmane\\Documents\\Projects\\Voyxa\\Assets\\_Voxya\\Voxel\\Unity\\Runtime\\VoxelWorld.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:Assets\\_Voxya\\Voxel\\Unity\\Runtime\\VoxelWorld.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
       "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\vmane\\Documents\\Projects\\Voyxa\\Assets\\_Voxya\\Voxel\\Unity\\Runtime\\VoxelSpawnOnGround.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:Assets\\_Voxya\\Voxel\\Unity\\Runtime\\VoxelSpawnOnGround.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
@@ -26,8 +38,47 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 0,
+          "SelectedChildIndex": 3,
           "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "CreateVoxelAtlas2x3.cs",
+              "DocumentMoniker": "C:\\Users\\vmane\\Documents\\Projects\\Voyxa\\Assets\\_Voxya\\Voxel\\Editor\\CreateVoxelAtlas2x3.cs",
+              "RelativeDocumentMoniker": "Assets\\_Voxya\\Voxel\\Editor\\CreateVoxelAtlas2x3.cs",
+              "ToolTip": "C:\\Users\\vmane\\Documents\\Projects\\Voyxa\\Assets\\_Voxya\\Voxel\\Editor\\CreateVoxelAtlas2x3.cs",
+              "RelativeToolTip": "Assets\\_Voxya\\Voxel\\Editor\\CreateVoxelAtlas2x3.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAoAAAAcAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-10-24T21:13:28.207Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "VoxelCacheTools.cs",
+              "DocumentMoniker": "C:\\Users\\vmane\\Documents\\Projects\\Voyxa\\Assets\\_Voxya\\Voxel\\Editor\\VoxelCacheTools.cs",
+              "RelativeDocumentMoniker": "Assets\\_Voxya\\Voxel\\Editor\\VoxelCacheTools.cs",
+              "ToolTip": "C:\\Users\\vmane\\Documents\\Projects\\Voyxa\\Assets\\_Voxya\\Voxel\\Editor\\VoxelCacheTools.cs",
+              "RelativeToolTip": "Assets\\_Voxya\\Voxel\\Editor\\VoxelCacheTools.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAYAAAAdAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-10-24T21:12:59.941Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "VoxelWorld.cs",
+              "DocumentMoniker": "C:\\Users\\vmane\\Documents\\Projects\\Voyxa\\Assets\\_Voxya\\Voxel\\Unity\\Runtime\\VoxelWorld.cs",
+              "RelativeDocumentMoniker": "Assets\\_Voxya\\Voxel\\Unity\\Runtime\\VoxelWorld.cs",
+              "ToolTip": "C:\\Users\\vmane\\Documents\\Projects\\Voyxa\\Assets\\_Voxya\\Voxel\\Unity\\Runtime\\VoxelWorld.cs",
+              "RelativeToolTip": "Assets\\_Voxya\\Voxel\\Unity\\Runtime\\VoxelWorld.cs",
+              "ViewState": "AgIAAAYAAAAAAAAAAAAAACsAAAAoAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-10-24T21:01:17.21Z",
+              "EditorCaption": ""
+            },
             {
               "$type": "Document",
               "DocumentIndex": 0,
@@ -36,14 +87,14 @@
               "RelativeDocumentMoniker": "Assets\\_Voxya\\Voxel\\Core\\Runtime\\Meshing\\GreedyMesher.cs",
               "ToolTip": "C:\\Users\\vmane\\Documents\\Projects\\Voyxa\\Assets\\_Voxya\\Voxel\\Core\\Runtime\\Meshing\\GreedyMesher.cs",
               "RelativeToolTip": "Assets\\_Voxya\\Voxel\\Core\\Runtime\\Meshing\\GreedyMesher.cs",
-              "ViewState": "AgIAAH8AAAAAAAAAAAAqwMEAAAABAAAAAAAAAA==",
+              "ViewState": "AgIAAHIAAAAAAAAAAAAqwLQAAAABAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2025-10-24T20:49:54.448Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 1,
+              "DocumentIndex": 4,
               "Title": "VoxelSpawnOnGround.cs",
               "DocumentMoniker": "C:\\Users\\vmane\\Documents\\Projects\\Voyxa\\Assets\\_Voxya\\Voxel\\Unity\\Runtime\\VoxelSpawnOnGround.cs",
               "RelativeDocumentMoniker": "Assets\\_Voxya\\Voxel\\Unity\\Runtime\\VoxelSpawnOnGround.cs",
@@ -51,12 +102,11 @@
               "RelativeToolTip": "Assets\\_Voxya\\Voxel\\Unity\\Runtime\\VoxelSpawnOnGround.cs",
               "ViewState": "AgIAAA4AAAAAAAAAAAAqwFAAAAABAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-10-24T20:34:17.802Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-10-24T20:34:17.802Z"
             },
             {
               "$type": "Document",
-              "DocumentIndex": 2,
+              "DocumentIndex": 5,
               "Title": "VoxelSpringArm.cs",
               "DocumentMoniker": "C:\\Users\\vmane\\Documents\\Projects\\Voyxa\\Assets\\_Voxya\\Voxel\\Unity\\Runtime\\VoxelSpringArm.cs",
               "RelativeDocumentMoniker": "Assets\\_Voxya\\Voxel\\Unity\\Runtime\\VoxelSpringArm.cs",
@@ -64,12 +114,11 @@
               "RelativeToolTip": "Assets\\_Voxya\\Voxel\\Unity\\Runtime\\VoxelSpringArm.cs",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAHcAAAABAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-10-24T20:07:46.103Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-10-24T20:07:46.103Z"
             },
             {
               "$type": "Document",
-              "DocumentIndex": 3,
+              "DocumentIndex": 6,
               "Title": "VoxelThirdPersonController.cs",
               "DocumentMoniker": "C:\\Users\\vmane\\Documents\\Projects\\Voyxa\\Assets\\_Voxya\\Voxel\\Unity\\Runtime\\VoxelThirdPersonController.cs",
               "RelativeDocumentMoniker": "Assets\\_Voxya\\Voxel\\Unity\\Runtime\\VoxelThirdPersonController.cs",
@@ -77,8 +126,7 @@
               "RelativeToolTip": "Assets\\_Voxya\\Voxel\\Unity\\Runtime\\VoxelThirdPersonController.cs",
               "ViewState": "AgIAAAoAAAAAAAAAAAAqwEwAAAABAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-10-24T20:05:51.057Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-10-24T20:05:51.057Z"
             }
           ]
         }
